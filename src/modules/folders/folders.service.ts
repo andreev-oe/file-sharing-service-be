@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import type Redis from 'ioredis';
 import { REDIS } from '../cache/redis.provider';
+import { FilesService } from '../files/files.service';
 import { Folder } from './entities/folder.entity';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { UpdateFolderDto } from './dto/update-folder.dto';
@@ -22,6 +23,7 @@ export class FoldersService {
   constructor(
     @InjectRepository(Folder)
     private readonly folderRepository: Repository<Folder>,
+    private readonly filesService: FilesService,
     @Inject(REDIS) private readonly redis: Redis,
   ) {}
 
@@ -60,18 +62,13 @@ export class FoldersService {
     return this.buildTree(allFolders, null);
   }
 
-  async getContents(
-    folderId: string,
-    ownerId: string,
-  ): Promise<{ folders: Folder[]; files: unknown[] }> {
+  async getChildFolders(folderId: string, ownerId: string): Promise<Folder[]> {
     await this.findOwnedOrFail(folderId, ownerId);
 
-    const childFolders = await this.folderRepository.find({
+    return this.folderRepository.find({
       where: { parentId: folderId, ownerId, isDeleted: false },
       order: { name: 'ASC' },
     });
-
-    return { folders: childFolders, files: [] };
   }
 
   async update(id: string, ownerId: string, dto: UpdateFolderDto): Promise<Folder> {
@@ -115,7 +112,7 @@ export class FoldersService {
   }
 
   async getFolderSize(folderId: string, ownerId: string): Promise<number> {
-    await this.findOwnedOrFail(folderId, ownerId);
+    const folder = await this.findOwnedOrFail(folderId, ownerId);
 
     const cacheKey = `${FOLDER_SIZE_CACHE_KEY_PREFIX}${folderId}`;
     const cachedValue = await this.redis.get(cacheKey);
@@ -123,19 +120,17 @@ export class FoldersService {
       return parseInt(cachedValue, 10);
     }
 
-    const result = await this.folderRepository.query<{ total: string }[]>(
-      `SELECT COALESCE(SUM(f.size), 0) AS total
-       FROM files f
-       JOIN folders fo ON fo.id = f."folderId"
-       WHERE fo."ownerId" = $1
-         AND f."isDeleted" = false
-         AND (fo.id = $2 OR fo.path LIKE $3)`,
-      [ownerId, folderId, `%/${folderId}%`],
-    );
+    const descendants = await this.folderRepository
+      .createQueryBuilder('folder')
+      .select('folder.id')
+      .where('folder.ownerId = :ownerId', { ownerId })
+      .andWhere('folder.path LIKE :pathPrefix', { pathPrefix: `${folder.path}/%` })
+      .getMany();
 
-    const totalSize = parseInt(result[0]?.total ?? '0', 10);
+    const folderIds = [folderId, ...descendants.map((descendant) => { return descendant.id; })];
+    const totalSize = await this.filesService.sumSizeForFolderIds(folderIds);
+
     await this.redis.set(cacheKey, totalSize.toString(), 'EX', FOLDER_SIZE_CACHE_TTL_SECONDS);
-
     return totalSize;
   }
 
