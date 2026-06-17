@@ -9,6 +9,7 @@
 | Метод | URL | Описание |
 |---|---|---|
 | POST | `/files/upload?folderId=<uuid>` | Загрузить файл (multipart/form-data, поле `file`) |
+| GET | `/files?folderId=<uuid>` | Файлы в папке; без `folderId` — файлы в корне |
 | GET | `/files/search?q=...` | Поиск по имени файла (ILIKE) |
 | GET | `/files/:id` | Метаданные файла |
 | GET | `/files/:id/download` | Presigned URL для скачивания |
@@ -27,6 +28,9 @@
 5. Загружает буфер в S3 через `StorageService`
 6. Сохраняет метаданные в PostgreSQL
 
+### `findByFolder(folderId, uploadedById)`
+Возвращает файлы пользователя в указанной папке. `folderId = null` — файлы в корне. Используется эндпоинтом `GET /files?folderId=:id`.
+
 ### `findById(id, uploadedById)`
 Ищет файл по `id` + `uploadedById` + `isDeleted = false`. Выбрасывает `NotFoundException` если не найден или принадлежит другому пользователю.
 
@@ -43,7 +47,7 @@
 Возвращает все версии файла: записи с тем же `name` + `folderId` + `uploadedById`. Сортировка по `version DESC`.
 
 ### `search(uploadedById, query)`
-`ILIKE '%query%'` по полю `name`. Возвращает не удалённые файлы пользователя.
+`ILIKE '%query%'` по полю `name`. Возвращает файлы пользователя, совпадающие с запросом.
 
 ### `resolveNextVersion(name, folderId, uploadedById)` (private)
 Ищет последнюю не удалённую версию файла с совпадающим именем в той же папке. Возвращает `latestVersion + 1` или `1` если версий нет. Использует `IsNull()` из TypeORM вместо `null` напрямую (требование TypeORM `FindOptionsWhere`).

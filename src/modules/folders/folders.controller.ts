@@ -15,7 +15,6 @@ import {
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
-import { FilesService } from '../files/files.service';
 import { FoldersService } from './folders.service';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { UpdateFolderDto } from './dto/update-folder.dto';
@@ -23,10 +22,7 @@ import { UpdateFolderDto } from './dto/update-folder.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('folders')
 export class FoldersController {
-  constructor(
-    private readonly foldersService: FoldersService,
-    private readonly filesService: FilesService,
-  ) {}
+  constructor(private readonly foldersService: FoldersService) {}
 
   @Post()
   create(@CurrentUser() user: User, @Body() dto: CreateFolderDto) {
@@ -43,18 +39,9 @@ export class FoldersController {
     return this.foldersService.search(user.id, query);
   }
 
-  @Get(':id/contents')
-  async getContents(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
-    const [folders, files] = await Promise.all([
-      this.foldersService.getChildFolders(id, user.id),
-      this.filesService.findByFolder(id, user.id),
-    ]);
-    return { folders, files };
-  }
-
-  @Get(':id/size')
-  getSize(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
-    return this.foldersService.getFolderSize(id, user.id);
+  @Get(':id/children')
+  getChildren(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.foldersService.getChildFolders(id, user.id);
   }
 
   @Patch(':id')

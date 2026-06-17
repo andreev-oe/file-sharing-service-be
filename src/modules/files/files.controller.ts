@@ -44,6 +44,11 @@ export class FilesController {
     return this.filesService.upload(user.id, uploadedFile, folderId);
   }
 
+  @Get()
+  findByFolder(@CurrentUser() user: User, @Query('folderId') folderId?: string) {
+    return this.filesService.findByFolder(folderId ?? null, user.id);
+  }
+
   @Get('search')
   search(@CurrentUser() user: User, @Query('q') query: string) {
     return this.filesService.search(user.id, query);

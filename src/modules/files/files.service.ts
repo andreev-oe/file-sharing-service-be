@@ -8,8 +8,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import type Redis from 'ioredis';
-import { REDIS } from '../cache/redis.provider';
-import { StorageService } from '../storage/storage.service';
+import { REDIS } from '../../infrastructure/cache/redis.provider';
+import { StorageService } from '../../infrastructure/storage/storage.service';
 import { File } from './entities/file.entity';
 import { UpdateFileDto } from './dto/update-file.dto';
 
@@ -157,19 +157,6 @@ export class FilesService {
       where: { folderId: folderId ?? IsNull(), uploadedById, isDeleted: false },
       order: { name: 'ASC' },
     });
-  }
-
-  async sumSizeForFolderIds(folderIds: string[]): Promise<number> {
-    if (folderIds.length === 0) {
-      return 0;
-    }
-    const result = await this.fileRepository
-      .createQueryBuilder('file')
-      .select('COALESCE(SUM(file.size), 0)', 'total')
-      .where('file.folderId IN (:...folderIds)', { folderIds })
-      .andWhere('file.isDeleted = false')
-      .getRawOne<{ total: string }>();
-    return parseInt(result?.total ?? '0', 10);
   }
 
   async search(uploadedById: string, query: string): Promise<File[]> {

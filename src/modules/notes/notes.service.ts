@@ -1,9 +1,11 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { Note } from './entities/note.entity';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
+
+const POSTGRES_FK_VIOLATION_CODE = '23503';
 
 const MENTION_PATTERN = /@(\w+)/g;
 
@@ -21,7 +23,14 @@ export class NotesService {
       content: dto.content,
       mentions: this.extractMentions(dto.content),
     });
-    return this.noteRepository.save(note);
+    try {
+      return await this.noteRepository.save(note);
+    } catch (error) {
+      if (error instanceof QueryFailedError && (error as QueryFailedError & { code: string }).code === POSTGRES_FK_VIOLATION_CODE) {
+        throw new BadRequestException('File not found');
+      }
+      throw error;
+    }
   }
 
   async findByFile(

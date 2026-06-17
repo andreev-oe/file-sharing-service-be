@@ -5,7 +5,7 @@ import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
 import s3Config from './config/s3.config';
-import { CacheModule } from './modules/cache/cache.module';
+import { CacheModule } from './infrastructure/cache/cache.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { FoldersModule } from './modules/folders/folders.module';
@@ -15,7 +15,7 @@ import { GroupsModule } from './modules/groups/groups.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 import { ShareLinksModule } from './modules/share-links/share-links.module';
 import { ReportsModule } from './modules/reports/reports.module';
-import { StorageModule } from './modules/storage/storage.module';
+import { StorageModule } from './infrastructure/storage/storage.module';
 
 @Module({
   imports: [

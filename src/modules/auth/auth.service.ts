@@ -7,7 +7,7 @@ import {
   DEFAULT_ACCESS_TOKEN_EXPIRES_IN_SECONDS,
   DEFAULT_REFRESH_TOKEN_EXPIRES_IN_SECONDS,
 } from '../../config/jwt.config';
-import { REDIS } from '../cache/redis.provider';
+import { REDIS } from '../../infrastructure/cache/redis.provider';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';

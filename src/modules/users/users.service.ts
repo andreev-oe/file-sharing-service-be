@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { StorageService } from '../../infrastructure/storage/storage.service';
 import { User } from './entities/user.entity';
 import { UpdateUserDto } from './dto/update-user.dto';
 
@@ -12,6 +13,7 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly storageService: StorageService,
   ) {}
 
   async create(email: string, password: string, name: string): Promise<User> {
@@ -42,7 +44,10 @@ export class UsersService {
     return this.findById(id);
   }
 
-  async updateAvatar(id: string, avatarUrl: string): Promise<User> {
+  async uploadAvatar(id: string, file: Express.Multer.File): Promise<User> {
+    const key = `avatars/${id}/${Date.now()}-${file.originalname}`;
+    await this.storageService.upload(key, file.buffer, file.mimetype);
+    const avatarUrl = this.storageService.getPublicUrl(key);
     await this.userRepository.update(id, { avatarUrl });
     return this.findById(id);
   }

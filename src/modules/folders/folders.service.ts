@@ -1,30 +1,22 @@
 import {
   BadRequestException,
-  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import type Redis from 'ioredis';
-import { REDIS } from '../cache/redis.provider';
-import { FilesService } from '../files/files.service';
 import { Folder } from './entities/folder.entity';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { UpdateFolderDto } from './dto/update-folder.dto';
 import { FolderTreeNodeDto } from './dto/folder-tree-node.dto';
 
 const MAX_FOLDER_DEPTH = 10;
-const FOLDER_SIZE_CACHE_TTL_SECONDS = 300;
-const FOLDER_SIZE_CACHE_KEY_PREFIX = 'folder:size:';
 
 @Injectable()
 export class FoldersService {
   constructor(
     @InjectRepository(Folder)
     private readonly folderRepository: Repository<Folder>,
-    private readonly filesService: FilesService,
-    @Inject(REDIS) private readonly redis: Redis,
   ) {}
 
   async create(ownerId: string, dto: CreateFolderDto): Promise<Folder> {
@@ -109,29 +101,6 @@ export class FoldersService {
       .andWhere('folder.name ILIKE :query', { query: `%${query}%` })
       .orderBy('folder.name', 'ASC')
       .getMany();
-  }
-
-  async getFolderSize(folderId: string, ownerId: string): Promise<number> {
-    const folder = await this.findOwnedOrFail(folderId, ownerId);
-
-    const cacheKey = `${FOLDER_SIZE_CACHE_KEY_PREFIX}${folderId}`;
-    const cachedValue = await this.redis.get(cacheKey);
-    if (cachedValue) {
-      return parseInt(cachedValue, 10);
-    }
-
-    const descendants = await this.folderRepository
-      .createQueryBuilder('folder')
-      .select('folder.id')
-      .where('folder.ownerId = :ownerId', { ownerId })
-      .andWhere('folder.path LIKE :pathPrefix', { pathPrefix: `${folder.path}/%` })
-      .getMany();
-
-    const folderIds = [folderId, ...descendants.map((descendant) => { return descendant.id; })];
-    const totalSize = await this.filesService.sumSizeForFolderIds(folderIds);
-
-    await this.redis.set(cacheKey, totalSize.toString(), 'EX', FOLDER_SIZE_CACHE_TTL_SECONDS);
-    return totalSize;
   }
 
   private async findOwnedOrFail(id: string, ownerId: string): Promise<Folder> {

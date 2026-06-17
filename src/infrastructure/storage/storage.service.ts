@@ -26,6 +26,11 @@ export class StorageService {
     this.bucket = config.get<string>('s3.bucket', 'fileshare');
   }
 
+  getPublicUrl(key: string): string {
+    const endpoint = this.config.get<string>('s3.endpoint', '');
+    return `${endpoint}/${this.bucket}/${key}`;
+  }
+
   async upload(key: string, buffer: Buffer, mimeType: string): Promise<string> {
     await this.client.send(
       new PutObjectCommand({
