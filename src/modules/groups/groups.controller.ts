@@ -3,34 +3,51 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { User } from '../users/entities/user.entity';
 import { GroupsService } from './groups.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 
+@UseGuards(JwtAuthGuard)
 @Controller('groups')
 export class GroupsController {
   constructor(private readonly groupsService: GroupsService) {}
 
   @Post()
-  create(@Body() dto: CreateGroupDto) {
-    throw new Error('Not implemented');
+  create(@CurrentUser() user: User, @Body() dto: CreateGroupDto) {
+    return this.groupsService.create(user.id, dto);
   }
 
   @Post(':id/members')
-  addMember(@Param('id') id: string, @Body() dto: AddMemberDto) {
-    throw new Error('Not implemented');
+  addMember(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddMemberDto,
+  ) {
+    return this.groupsService.addMember(id, user.id, dto);
   }
 
   @Delete(':id/members/:userId')
-  removeMember(@Param('id') id: string, @Param('userId') userId: string) {
-    throw new Error('Not implemented');
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeMember(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ) {
+    return this.groupsService.removeMember(id, user.id, userId);
   }
 
   @Get(':id/members')
-  getMembers(@Param('id') id: string) {
-    throw new Error('Not implemented');
+  getMembers(@Param('id', ParseUUIDPipe) id: string) {
+    return this.groupsService.getMembers(id);
   }
 }
