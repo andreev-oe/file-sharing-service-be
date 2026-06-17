@@ -14,6 +14,19 @@ export const REPORTS_QUEUE = 'reports';
 
 const REPORT_S3_KEY_PREFIX = 'reports';
 
+const PROGRESS_STARTED = 10;
+const PROGRESS_DATA_FETCHED = 50;
+const PROGRESS_FILE_GENERATED = 80;
+const PROGRESS_DONE = 100;
+
+const PDF_MARGIN = 50;
+const PDF_TITLE_FONT_SIZE = 18;
+const PDF_SUBTITLE_FONT_SIZE = 11;
+const PDF_CELL_FONT_SIZE = 10;
+const PDF_PAGE_RIGHT_X = 545;
+const PDF_SECTION_SPACING = 1.5;
+const PDF_ROW_SPACING = 0.5;
+
 export interface ReportJobData {
   userId: string;
   type: ReportType;
@@ -37,21 +50,21 @@ export class ReportsProcessor extends WorkerHost {
   }
 
   async process(job: Job<ReportJobData>): Promise<ReportJobResult> {
-    await job.updateProgress(10);
+    await job.updateProgress(PROGRESS_STARTED);
 
     const rows = await this.fetchData(job.data);
-    await job.updateProgress(50);
+    await job.updateProgress(PROGRESS_DATA_FETCHED);
 
     const mimeType = job.data.format === ReportFormat.CSV ? 'text/csv' : 'application/pdf';
     const buffer =
       job.data.format === ReportFormat.CSV
         ? await this.generateCsv(rows)
         : await this.generatePdf(job.data, rows);
-    await job.updateProgress(80);
+    await job.updateProgress(PROGRESS_FILE_GENERATED);
 
     const s3Key = `${REPORT_S3_KEY_PREFIX}/${job.data.userId}/${job.id}.${job.data.format}`;
     await this.storageService.upload(s3Key, buffer, mimeType);
-    await job.updateProgress(100);
+    await job.updateProgress(PROGRESS_DONE);
 
     return { s3Key };
   }
@@ -174,31 +187,31 @@ export class ReportsProcessor extends WorkerHost {
 
   private generatePdf(jobData: ReportJobData, rows: Record<string, unknown>[]): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      const document = new PDFDocument({ margin: 50 });
+      const document = new PDFDocument({ margin: PDF_MARGIN });
       const chunks: Buffer[] = [];
       document.on('data', (chunk: Buffer) => { chunks.push(chunk); });
       document.on('end', () => { resolve(Buffer.concat(chunks)); });
       document.on('error', reject);
 
-      document.fontSize(18).text(`${jobData.type} Report`, { align: 'center' });
+      document.fontSize(PDF_TITLE_FONT_SIZE).text(`${jobData.type} Report`, { align: 'center' });
       document.moveDown();
-      document.fontSize(11).text(`Generated: ${new Date().toISOString()}`);
-      document.moveDown(1.5);
+      document.fontSize(PDF_SUBTITLE_FONT_SIZE).text(`Generated: ${new Date().toISOString()}`);
+      document.moveDown(PDF_SECTION_SPACING);
 
       if (rows.length === 0) {
-        document.fontSize(11).text('No data available for the selected period.');
+        document.fontSize(PDF_SUBTITLE_FONT_SIZE).text('No data available for the selected period.');
       } else {
         const headers = Object.keys(rows[0]);
         for (const row of rows) {
           for (const header of headers) {
-            document.fontSize(10).text(`${header}: ${String(row[header] ?? '')}`);
+            document.fontSize(PDF_CELL_FONT_SIZE).text(`${header}: ${String(row[header] ?? '')}`);
           }
-          document.moveDown(0.5);
+          document.moveDown(PDF_ROW_SPACING);
           document
-            .moveTo(50, document.y)
-            .lineTo(545, document.y)
+            .moveTo(PDF_MARGIN, document.y)
+            .lineTo(PDF_PAGE_RIGHT_X, document.y)
             .stroke();
-          document.moveDown(0.5);
+          document.moveDown(PDF_ROW_SPACING);
         }
       }
 
