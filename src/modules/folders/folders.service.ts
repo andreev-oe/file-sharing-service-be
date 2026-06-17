@@ -15,6 +15,7 @@ import { FolderTreeNodeDto } from './dto/folder-tree-node.dto';
 
 const MAX_FOLDER_DEPTH = 10;
 const FOLDER_SIZE_CACHE_TTL_SECONDS = 300;
+const FOLDER_SIZE_CACHE_KEY_PREFIX = 'folder:size:';
 
 @Injectable()
 export class FoldersService {
@@ -116,7 +117,7 @@ export class FoldersService {
   async getFolderSize(folderId: string, ownerId: string): Promise<number> {
     await this.findOwnedOrFail(folderId, ownerId);
 
-    const cacheKey = `folder:size:${folderId}`;
+    const cacheKey = `${FOLDER_SIZE_CACHE_KEY_PREFIX}${folderId}`;
     const cachedValue = await this.redis.get(cacheKey);
     if (cachedValue) {
       return parseInt(cachedValue, 10);

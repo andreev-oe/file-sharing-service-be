@@ -5,6 +5,8 @@ import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
 import { UpdateUserDto } from './dto/update-user.dto';
 
+const BCRYPT_SALT_ROUNDS = 10;
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -18,7 +20,7 @@ export class UsersService {
       throw new ConflictException('Email already in use');
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
     const user = this.userRepository.create({ email, passwordHash, name });
     return this.userRepository.save(user);
   }

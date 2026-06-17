@@ -3,12 +3,22 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import type Redis from 'ioredis';
+import {
+  DEFAULT_ACCESS_TOKEN_EXPIRES_IN_SECONDS,
+  DEFAULT_REFRESH_TOKEN_EXPIRES_IN_SECONDS,
+} from '../../config/jwt.config';
 import { REDIS } from '../cache/redis.provider';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
-const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60;
+const REDIS_REFRESH_TOKEN_KEY_PREFIX = 'refresh:';
+
+interface RefreshTokenPayload {
+  sub: string;
+  jti: string;
+  type: string;
+}
 
 @Injectable()
 export class AuthService {
@@ -29,8 +39,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const valid = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!valid) {
+    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -38,10 +48,10 @@ export class AuthService {
   }
 
   async refresh(token: string): Promise<{ accessToken: string; refreshToken: string }> {
-    let payload: { sub: string; jti: string; type: string };
+    let payload: RefreshTokenPayload;
 
     try {
-      payload = this.jwtService.verify(token, {
+      payload = this.jwtService.verify<RefreshTokenPayload>(token, {
         secret: this.config.get<string>('jwt.secret'),
       });
     } catch {
@@ -52,23 +62,19 @@ export class AuthService {
       throw new UnauthorizedException();
     }
 
-    const stored = await this.redis.get(`refresh:${payload.jti}`);
-    if (!stored) {
+    const storedUserId = await this.redis.get(`${REDIS_REFRESH_TOKEN_KEY_PREFIX}${payload.jti}`);
+    if (!storedUserId) {
       throw new UnauthorizedException('Refresh token revoked or expired');
     }
 
-    await this.redis.del(`refresh:${payload.jti}`);
+    await this.redis.del(`${REDIS_REFRESH_TOKEN_KEY_PREFIX}${payload.jti}`);
     return this.issueTokenPair(payload.sub);
   }
 
   async logout(token: string): Promise<void> {
-    try {
-      const payload = this.jwtService.decode(token) as { jti?: string } | null;
-      if (payload?.jti) {
-        await this.redis.del(`refresh:${payload.jti}`);
-      }
-    } catch {
-      // malformed token — nothing to revoke
+    const payload = this.jwtService.decode(token);
+    if (payload && typeof payload === 'object' && 'jti' in payload && typeof payload.jti === 'string') {
+      await this.redis.del(`${REDIS_REFRESH_TOKEN_KEY_PREFIX}${payload.jti}`);
     }
   }
 
@@ -77,18 +83,31 @@ export class AuthService {
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const jti = crypto.randomUUID();
     const secret = this.config.get<string>('jwt.secret');
+    const accessExpiresIn = this.config.get<number>(
+      'jwt.accessExpiresInSeconds',
+      DEFAULT_ACCESS_TOKEN_EXPIRES_IN_SECONDS,
+    );
+    const refreshExpiresIn = this.config.get<number>(
+      'jwt.refreshExpiresInSeconds',
+      DEFAULT_REFRESH_TOKEN_EXPIRES_IN_SECONDS,
+    );
 
     const accessToken = this.jwtService.sign(
       { sub: userId },
-      { secret, expiresIn: this.config.get('jwt.accessExpiresIn', '15m') as any },
+      { secret, expiresIn: accessExpiresIn },
     );
 
     const refreshToken = this.jwtService.sign(
       { sub: userId, jti, type: 'refresh' },
-      { secret, expiresIn: this.config.get('jwt.refreshExpiresIn', '7d') as any },
+      { secret, expiresIn: refreshExpiresIn },
     );
 
-    await this.redis.set(`refresh:${jti}`, userId, 'EX', REFRESH_TTL_SECONDS);
+    await this.redis.set(
+      `${REDIS_REFRESH_TOKEN_KEY_PREFIX}${jti}`,
+      userId,
+      'EX',
+      refreshExpiresIn,
+    );
 
     return { accessToken, refreshToken };
   }
