@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsOptional, IsString, IsUUID, ValidateIf } from 'class-validator';
 
 export class UpdateFolderDto {
   @IsOptional()
@@ -6,6 +6,7 @@ export class UpdateFolderDto {
   name?: string;
 
   @IsOptional()
+  @ValidateIf((object: UpdateFolderDto) => { return object.parentId !== null; })
   @IsUUID()
-  parentId?: string;
+  parentId?: string | null;
 }
