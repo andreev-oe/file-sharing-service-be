@@ -1,12 +1,9 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import type { ConfigType } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import type Redis from 'ioredis';
-import {
-  DEFAULT_ACCESS_TOKEN_EXPIRES_IN_SECONDS,
-  DEFAULT_REFRESH_TOKEN_EXPIRES_IN_SECONDS,
-} from '../../config/jwt.config';
+import jwtConfig from '../../config/jwt.config';
 import { REDIS } from '../../infrastructure/cache/redis.provider';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
@@ -25,7 +22,7 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
-    private readonly config: ConfigService,
+    @Inject(jwtConfig.KEY) private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
     @Inject(REDIS) private readonly redis: Redis,
   ) {}
 
@@ -52,7 +49,7 @@ export class AuthService {
 
     try {
       payload = this.jwtService.verify<RefreshTokenPayload>(token, {
-        secret: this.config.get<string>('jwt.secret'),
+        secret: this.jwtConfiguration.secret,
       });
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
@@ -82,31 +79,23 @@ export class AuthService {
     userId: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const jti = crypto.randomUUID();
-    const secret = this.config.get<string>('jwt.secret');
-    const accessExpiresIn = this.config.get<number>(
-      'jwt.accessExpiresInSeconds',
-      DEFAULT_ACCESS_TOKEN_EXPIRES_IN_SECONDS,
-    );
-    const refreshExpiresIn = this.config.get<number>(
-      'jwt.refreshExpiresInSeconds',
-      DEFAULT_REFRESH_TOKEN_EXPIRES_IN_SECONDS,
-    );
+    const { secret, accessExpiresInSeconds, refreshExpiresInSeconds } = this.jwtConfiguration;
 
     const accessToken = this.jwtService.sign(
       { sub: userId },
-      { secret, expiresIn: accessExpiresIn },
+      { secret, expiresIn: accessExpiresInSeconds },
     );
 
     const refreshToken = this.jwtService.sign(
       { sub: userId, jti, type: 'refresh' },
-      { secret, expiresIn: refreshExpiresIn },
+      { secret, expiresIn: refreshExpiresInSeconds },
     );
 
     await this.redis.set(
       `${REDIS_REFRESH_TOKEN_KEY_PREFIX}${jti}`,
       userId,
       'EX',
-      refreshExpiresIn,
+      refreshExpiresInSeconds,
     );
 
     return { accessToken, refreshToken };

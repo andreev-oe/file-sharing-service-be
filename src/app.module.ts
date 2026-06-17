@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule, ConfigType } from '@nestjs/config';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
@@ -25,19 +25,20 @@ import { StorageModule } from './infrastructure/storage/storage.module';
       load: [appConfig, databaseConfig, jwtConfig, redisConfig, s3Config],
     }),
     TypeOrmModule.forRootAsync({
-      useFactory: (config: ConfigService): TypeOrmModuleOptions => {
-        return {
-          type: 'postgres',
-          host: config.get<string>('database.host'),
-          port: config.get<number>('database.port'),
-          username: config.get<string>('database.username'),
-          password: config.get<string>('database.password'),
-          database: config.get<string>('database.database'),
-          autoLoadEntities: true,
-          synchronize: config.get<string>('app.nodeEnv') !== 'production',
-        };
-      },
-      inject: [ConfigService],
+      useFactory: (
+        databaseConfiguration: ConfigType<typeof databaseConfig>,
+        appConfiguration: ConfigType<typeof appConfig>,
+      ): TypeOrmModuleOptions => ({
+        type: 'postgres',
+        host: databaseConfiguration.host,
+        port: databaseConfiguration.port,
+        username: databaseConfiguration.username,
+        password: databaseConfiguration.password,
+        database: databaseConfiguration.database,
+        autoLoadEntities: true,
+        synchronize: appConfiguration.nodeEnv !== 'production',
+      }),
+      inject: [databaseConfig.KEY, appConfig.KEY],
     }),
     CacheModule,
     AuthModule,

@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Inject, Injectable } from '@nestjs/common';
+import type { ConfigType } from '@nestjs/config';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
@@ -7,28 +7,30 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import s3Config from '../../config/s3.config';
 
 @Injectable()
 export class StorageService {
   private readonly client: S3Client;
   private readonly bucket: string;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    @Inject(s3Config.KEY) private readonly s3Configuration: ConfigType<typeof s3Config>,
+  ) {
     this.client = new S3Client({
-      region: config.get<string>('s3.region', 'us-east-1'),
-      endpoint: config.get<string>('s3.endpoint'),
+      region: s3Configuration.region,
+      endpoint: s3Configuration.endpoint,
       credentials: {
-        accessKeyId: config.get<string>('s3.accessKeyId', ''),
-        secretAccessKey: config.get<string>('s3.secretAccessKey', ''),
+        accessKeyId: s3Configuration.accessKeyId,
+        secretAccessKey: s3Configuration.secretAccessKey,
       },
       forcePathStyle: true,
     });
-    this.bucket = config.get<string>('s3.bucket', 'fileshare');
+    this.bucket = s3Configuration.bucket;
   }
 
   getPublicUrl(key: string): string {
-    const endpoint = this.config.get<string>('s3.endpoint', '');
-    return `${endpoint}/${this.bucket}/${key}`;
+    return `${this.s3Configuration.endpoint}/${this.bucket}/${key}`;
   }
 
   async upload(key: string, buffer: Buffer, mimeType: string): Promise<string> {
