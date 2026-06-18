@@ -1,8 +1,10 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import type { LoggerService } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import type Redis from 'ioredis';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import jwtConfig from '../../config/jwt.config';
 import { REDIS } from '../../infrastructure/cache/redis.provider';
 import { UsersService } from '../users/users.service';
@@ -25,6 +27,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     @Inject(jwtConfig.KEY) private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
     @Inject(REDIS) private readonly redis: Redis,
+    @Inject(WINSTON_MODULE_NEST_PROVIDER) private readonly logger: LoggerService,
   ) {}
 
   async register(dto: RegisterDto): Promise<void> {
@@ -34,11 +37,13 @@ export class AuthService {
   async login(dto: LoginDto): Promise<{ accessToken: string; refreshToken: string }> {
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) {
+      this.logger.warn(`Failed login: ${dto.email} (user not found)`);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isPasswordValid) {
+      this.logger.warn(`Failed login: ${dto.email} (invalid password)`);
       throw new UnauthorizedException('Invalid credentials');
     }
 

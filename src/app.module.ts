@@ -1,6 +1,10 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigType } from '@nestjs/config';
+import { WinstonModule } from 'nest-winston';
+import * as winston from 'winston';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { PermissionsGuard } from './common/guards/permissions.guard';
@@ -21,6 +25,16 @@ import { PermissionsModule } from './modules/permissions/permissions.module';
 import { ShareLinksModule } from './modules/share-links/share-links.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
+
+function buildWinstonConsoleFormat(nodeEnv: string): winston.Logform.Format {
+  return nodeEnv === 'production'
+    ? winston.format.combine(winston.format.timestamp(), winston.format.json())
+    : winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.colorize(),
+        winston.format.simple(),
+      );
+}
 
 @Module({
   imports: [
@@ -51,6 +65,16 @@ import { StorageModule } from './infrastructure/storage/storage.module';
       }]),
       inject: [throttlerConfig.KEY],
     }),
+    WinstonModule.forRootAsync({
+      useFactory: (appConfiguration: ConfigType<typeof appConfig>) => ({
+        transports: [
+          new winston.transports.Console({
+            format: buildWinstonConsoleFormat(appConfiguration.nodeEnv),
+          }),
+        ],
+      }),
+      inject: [appConfig.KEY],
+    }),
     CacheModule,
     AuthModule,
     UsersModule,
@@ -65,12 +89,20 @@ import { StorageModule } from './infrastructure/storage/storage.module';
   ],
   providers: [
     {
+      provide: APP_FILTER,
+      useClass: HttpExceptionFilter,
+    },
+    {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
     {
       provide: APP_GUARD,
       useClass: PermissionsGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: LoggingInterceptor,
     },
   ],
 })
