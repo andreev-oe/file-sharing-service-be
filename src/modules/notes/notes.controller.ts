@@ -12,6 +12,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 const DEFAULT_PAGE = 1;
@@ -22,17 +23,21 @@ import { NotesService } from './notes.service';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
 
+@ApiTags('Notes')
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('notes')
 export class NotesController {
   constructor(private readonly notesService: NotesService) {}
 
   @Post()
+  @ApiOperation({ summary: 'Создать заметку к файлу' })
   create(@CurrentUser() user: User, @Body() dto: CreateNoteDto) {
     return this.notesService.create(user.id, dto);
   }
 
   @Get('file/:fileId')
+  @ApiOperation({ summary: 'Получить заметки к файлу с пагинацией' })
   findByFile(
     @Param('fileId', ParseUUIDPipe) fileId: string,
     @Query('page') page = DEFAULT_PAGE,
@@ -42,6 +47,7 @@ export class NotesController {
   }
 
   @Patch(':id')
+  @ApiOperation({ summary: 'Обновить текст заметки' })
   update(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -52,6 +58,7 @@ export class NotesController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Удалить заметку' })
   remove(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
     return this.notesService.remove(id, user.id);
   }
