@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -17,6 +18,7 @@ import { User } from '../users/entities/user.entity';
 import { GroupsService } from './groups.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { AddMemberDto } from './dto/add-member.dto';
+import { TransferOwnershipDto } from './dto/transfer-ownership.dto';
 
 @ApiTags('Groups')
 @ApiBearerAuth()
@@ -50,6 +52,17 @@ export class GroupsController {
     @Param('userId', ParseUUIDPipe) userId: string,
   ) {
     return this.groupsService.removeMember(id, user.id, userId);
+  }
+
+  @Patch(':id/transfer-ownership')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Передать роль owner другому участнику группы' })
+  transferOwnership(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: TransferOwnershipDto,
+  ) {
+    return this.groupsService.transferOwnership(id, user.id, dto.newOwnerId);
   }
 
   @Get(':id/members')

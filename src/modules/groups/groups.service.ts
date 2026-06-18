@@ -68,11 +68,39 @@ export class GroupsService {
     if (!member) {
       throw new NotFoundException('Member not found');
     }
+
     if (member.role === GroupMemberRole.OWNER) {
-      throw new ForbiddenException('Cannot remove the group owner');
+      if (requesterId !== userId) {
+        throw new ForbiddenException('Only the owner can remove themselves from the group');
+      }
+      await this.promoteOldestAdminToOwner(groupId);
     }
 
     await this.groupMemberRepository.delete(member.id);
+  }
+
+  async transferOwnership(groupId: string, requesterId: string, newOwnerId: string): Promise<void> {
+    const requesterMember = await this.groupMemberRepository.findOne({
+      where: { groupId, userId: requesterId },
+    });
+    if (!requesterMember || requesterMember.role !== GroupMemberRole.OWNER) {
+      throw new ForbiddenException('Only the group owner can transfer ownership');
+    }
+
+    if (requesterId === newOwnerId) {
+      throw new ForbiddenException('Cannot transfer ownership to yourself');
+    }
+
+    const newOwnerMember = await this.groupMemberRepository.findOne({
+      where: { groupId, userId: newOwnerId },
+    });
+    if (!newOwnerMember) {
+      throw new NotFoundException('New owner is not a member of this group');
+    }
+
+    await this.groupMemberRepository.update(requesterMember.id, { role: GroupMemberRole.ADMIN });
+    await this.groupMemberRepository.update(newOwnerMember.id, { role: GroupMemberRole.OWNER });
+    await this.groupRepository.update(groupId, { ownerId: newOwnerId });
   }
 
   async getMembers(groupId: string): Promise<GroupMember[]> {
@@ -90,5 +118,19 @@ export class GroupsService {
     if (!member || !MANAGER_ROLES.has(member.role)) {
       throw new ForbiddenException('Only group owners and admins can manage members');
     }
+  }
+
+  private async promoteOldestAdminToOwner(groupId: string): Promise<void> {
+    const adminToPromote = await this.groupMemberRepository.findOne({
+      where: { groupId, role: GroupMemberRole.ADMIN },
+      order: { createdAt: 'ASC' },
+    });
+    if (!adminToPromote) {
+      throw new ForbiddenException(
+        'Cannot leave the group: no admin to promote. Transfer ownership first.',
+      );
+    }
+    await this.groupMemberRepository.update(adminToPromote.id, { role: GroupMemberRole.OWNER });
+    await this.groupRepository.update(groupId, { ownerId: adminToPromote.userId });
   }
 }
