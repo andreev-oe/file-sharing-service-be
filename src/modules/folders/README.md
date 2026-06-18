@@ -24,7 +24,13 @@
 - корневая папка → `/{folderId}`
 - вложенная папка → `{parent.path}/{folderId}`
 
-После сохранения инвалидирует кэш дерева (`folder:tree:{ownerId}`).
+После сохранения инвалидирует кэш дерева (`folder:tree:{ownerId}`) и эмитит событие `folderCreated` через `EventBus`. `PermissionsService` подписан на это событие и автоматически копирует все права родительской папки в дочернюю.
+
+### Каскадное обновление прав
+
+`FoldersService` подписан на событие `permissionChangedOnFolder` из `EventBus`. Когда `PermissionsService` выдаёт или отзывает права на папку, `FoldersService` находит все дочерние папки по материализованному пути (`path LIKE '{path}/%'`) и эмитит `cascadePermissionsToFolders` с их ID. `PermissionsService` применяет изменение к каждому потомку.
+
+Таким образом, при `grant`/`revoke` права автоматически распространяются на всё поддерево папок.
 
 ### `getTree(ownerId)`
 Загружает все папки пользователя одним запросом, затем рекурсивно строит дерево в памяти через `buildTree()`. Возвращает `FolderTreeNodeDto[]`.

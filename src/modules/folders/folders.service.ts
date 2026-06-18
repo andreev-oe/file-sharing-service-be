@@ -3,11 +3,16 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
 } from '@nestjs/common';
 import type Redis from 'ioredis';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Subscription } from 'rxjs';
 import { Repository } from 'typeorm';
 import { REDIS } from '../../infrastructure/cache/redis.provider';
+import { EventBus } from '../../infrastructure/events/event-bus';
+import type { PermissionChangedOnFolderEvent } from '../../infrastructure/events/permission-changed-on-folder.event';
 import { Folder } from './entities/folder.entity';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { UpdateFolderDto } from './dto/update-folder.dto';
@@ -18,12 +23,27 @@ const FOLDER_TREE_CACHE_TTL_SECONDS = 600;
 const FOLDER_TREE_CACHE_KEY_PREFIX = 'folder:tree:';
 
 @Injectable()
-export class FoldersService {
+export class FoldersService implements OnModuleInit, OnModuleDestroy {
+  private permissionChangedSubscription: Subscription;
+
   constructor(
     @InjectRepository(Folder)
     private readonly folderRepository: Repository<Folder>,
     @Inject(REDIS) private readonly redis: Redis,
+    private readonly eventBus: EventBus,
   ) {}
+
+  onModuleInit() {
+    this.permissionChangedSubscription = this.eventBus.permissionChangedOnFolder.subscribe(
+      async (event) => {
+        await this.handlePermissionChangedOnFolder(event);
+      },
+    );
+  }
+
+  onModuleDestroy() {
+    this.permissionChangedSubscription.unsubscribe();
+  }
 
   async create(ownerId: string, dto: CreateFolderDto): Promise<Folder> {
     const folderId = crypto.randomUUID();
@@ -50,6 +70,7 @@ export class FoldersService {
 
     const saved = await this.folderRepository.save(folder);
     await this.invalidateTreeCache(ownerId);
+    this.eventBus.folderCreated.next({ folderId: saved.id, parentId: dto.parentId ?? null });
     return saved;
   }
 
@@ -120,6 +141,35 @@ export class FoldersService {
       .andWhere('folder.name ILIKE :query', { query: `%${query}%` })
       .orderBy('folder.name', 'ASC')
       .getMany();
+  }
+
+  private async handlePermissionChangedOnFolder(event: PermissionChangedOnFolderEvent): Promise<void> {
+    const parentFolder = await this.folderRepository.findOne({
+      where: { id: event.folderId },
+      select: { path: true },
+    });
+    if (!parentFolder) {
+      return;
+    }
+
+    const descendants = await this.folderRepository
+      .createQueryBuilder('folder')
+      .where('folder.path LIKE :prefix', { prefix: `${parentFolder.path}/%` })
+      .andWhere('folder.isDeleted = false')
+      .select(['folder.id'])
+      .getMany();
+
+    if (descendants.length === 0) {
+      return;
+    }
+
+    this.eventBus.cascadePermissionsToFolders.next({
+      action: event.action,
+      folderIds: descendants.map((folder) => { return folder.id; }),
+      subjectType: event.subjectType,
+      subjectId: event.subjectId,
+      permissionLevel: event.permissionLevel,
+    });
   }
 
   private async findOwnedOrFail(id: string, ownerId: string): Promise<Folder> {

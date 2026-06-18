@@ -15,6 +15,7 @@ import redisConfig from './config/redis.config';
 import s3Config from './config/s3.config';
 import throttlerConfig from './config/throttler.config';
 import { CacheModule } from './infrastructure/cache/cache.module';
+import { EventsModule } from './infrastructure/events/events.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { FoldersModule } from './modules/folders/folders.module';
@@ -78,6 +79,7 @@ function buildWinstonConsoleFormat(nodeEnv: string): winston.Logform.Format {
       inject: [appConfig.KEY],
     }),
     CacheModule,
+    EventsModule,
     AuthModule,
     UsersModule,
     FoldersModule,

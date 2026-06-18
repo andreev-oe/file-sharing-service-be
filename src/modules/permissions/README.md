@@ -91,6 +91,22 @@ Upsert: если разрешение для той же пары `(subjectType,
 
 Одна запись покрывает проверку любого уровня для пары ресурс+пользователь. Инвалидируется по паттерну `perm:{resourceType}:{resourceId}:*` при `grant` и `revoke` — сбрасывает кэш всех пользователей для данного ресурса, включая EVERYONE-записи.
 
+## Наследование прав при создании папки
+
+`PermissionsService` подписан на событие `folderCreated` из инфраструктурного `EventBus`. При создании подпапки `FoldersService` эмитит событие с `{ folderId, parentId }`. Если `parentId` задан, `PermissionsService.inheritFromParent()` копирует все права родительской папки в дочернюю.
+
+## Каскадное обновление прав
+
+При вызове `grant()` или `revoke()` для папки автоматически обновляются права во всех дочерних папках:
+
+1. `PermissionsService` эмитит `permissionChangedOnFolder` с деталями изменения.
+2. `FoldersService` подписан на это событие, находит все потомки по материализованному пути (`path LIKE '{path}/%'`) и эмитит `cascadePermissionsToFolders` со списком их ID.
+3. `PermissionsService` подписан на `cascadePermissionsToFolders` и применяет `upsert` или `delete` к каждому потомку.
+
+Каскад не вызывает `grant()`/`revoke()` публичных методов (которые снова эмитили бы событие) — он работает напрямую через приватные `upsertPermission()` / `deletePermissionBySubject()`.
+
+Изоляция модулей не нарушается: все взаимодействие идёт через инфраструктурный `EventBus` (rxjs Subject), ни один бизнес-модуль не импортирует другой.
+
 ## Архитектурное решение
 
 `PermissionsModule` регистрирует `TypeOrmModule.forFeature([Permission, GroupMember])` — это единственный способ дать `checkForUser()` доступ к `group_members` без импорта `GroupsModule`. Guard зарегистрирован глобально, поэтому не требует импорта `PermissionsModule` в каждый бизнес-модуль.

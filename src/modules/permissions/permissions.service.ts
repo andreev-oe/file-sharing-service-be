@@ -1,6 +1,9 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import type Redis from 'ioredis';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Subscription } from 'rxjs';
+import { EventBus } from '../../infrastructure/events/event-bus';
+import type { CascadePermissionsToFoldersEvent } from '../../infrastructure/events/cascade-permissions-to-folders.event';
 import { Brackets, Repository } from 'typeorm';
 import { REDIS } from '../../infrastructure/cache/redis.provider';
 import { Permission } from './entities/permission.entity';
@@ -25,38 +28,57 @@ function isPermissionLevel(value: string): value is PermissionLevel {
 }
 
 @Injectable()
-export class PermissionsService {
+export class PermissionsService implements OnModuleInit, OnModuleDestroy {
+  private folderCreatedSubscription: Subscription;
+  private cascadePermissionsSubscription: Subscription;
+
   constructor(
     @InjectRepository(Permission)
     private readonly permissionRepository: Repository<Permission>,
     @InjectRepository(GroupMember)
     private readonly groupMemberRepository: Repository<GroupMember>,
     @Inject(REDIS) private readonly redis: Redis,
+    private readonly eventBus: EventBus,
   ) {}
+
+  onModuleInit() {
+    this.folderCreatedSubscription = this.eventBus.folderCreated.subscribe(async (event) => {
+      if (event.parentId) {
+        await this.inheritFromParent(event.parentId, event.folderId);
+      }
+    });
+    this.cascadePermissionsSubscription = this.eventBus.cascadePermissionsToFolders.subscribe(
+      async (event) => {
+        await this.applyCascade(event);
+      },
+    );
+  }
+
+  onModuleDestroy() {
+    this.folderCreatedSubscription.unsubscribe();
+    this.cascadePermissionsSubscription.unsubscribe();
+  }
 
   async grant(dto: CreatePermissionDto): Promise<Permission> {
     const subjectId = dto.subjectType === SubjectType.EVERYONE ? EVERYONE_SUBJECT_ID : dto.subjectId ?? '';
+    const result = await this.upsertPermission(
+      dto.subjectType,
+      subjectId,
+      dto.resourceType,
+      dto.resourceId,
+      dto.permission,
+    );
 
-    const existing = await this.permissionRepository.findOne({
-      where: {
+    if (dto.resourceType === ResourceType.FOLDER) {
+      this.eventBus.permissionChangedOnFolder.next({
+        action: 'grant',
+        folderId: dto.resourceId,
         subjectType: dto.subjectType,
         subjectId,
-        resourceType: dto.resourceType,
-        resourceId: dto.resourceId,
-      },
-    });
-
-    let result: Permission;
-    if (existing) {
-      existing.permission = dto.permission;
-      result = await this.permissionRepository.save(existing);
-    } else {
-      result = await this.permissionRepository.save(
-        this.permissionRepository.create({ ...dto, subjectId }),
-      );
+        permissionLevel: dto.permission,
+      });
     }
 
-    await this.invalidateResourceCache(dto.resourceType, dto.resourceId);
     return result;
   }
 
@@ -67,6 +89,15 @@ export class PermissionsService {
     }
     await this.permissionRepository.delete(id);
     await this.invalidateResourceCache(permission.resourceType, permission.resourceId);
+
+    if (permission.resourceType === ResourceType.FOLDER) {
+      this.eventBus.permissionChangedOnFolder.next({
+        action: 'revoke',
+        folderId: permission.resourceId,
+        subjectType: permission.subjectType,
+        subjectId: permission.subjectId,
+      });
+    }
   }
 
   async check(
@@ -159,6 +190,86 @@ export class PermissionsService {
         ? current.permission
         : best;
     }, permissions[0].permission);
+  }
+
+  private async upsertPermission(
+    subjectType: SubjectType,
+    subjectId: string,
+    resourceType: ResourceType,
+    resourceId: string,
+    permissionLevel: PermissionLevel,
+  ): Promise<Permission> {
+    const existing = await this.permissionRepository.findOne({
+      where: { subjectType, subjectId, resourceType, resourceId },
+    });
+
+    if (existing) {
+      existing.permission = permissionLevel;
+      const result = await this.permissionRepository.save(existing);
+      await this.invalidateResourceCache(resourceType, resourceId);
+      return result;
+    }
+
+    const result = await this.permissionRepository.save(
+      this.permissionRepository.create({ subjectType, subjectId, resourceType, resourceId, permission: permissionLevel }),
+    );
+    await this.invalidateResourceCache(resourceType, resourceId);
+    return result;
+  }
+
+  private async deletePermissionBySubject(
+    subjectType: SubjectType,
+    subjectId: string,
+    resourceType: ResourceType,
+    resourceId: string,
+  ): Promise<void> {
+    const permission = await this.permissionRepository.findOne({
+      where: { subjectType, subjectId, resourceType, resourceId },
+    });
+    if (!permission) {
+      return;
+    }
+    await this.permissionRepository.delete(permission.id);
+    await this.invalidateResourceCache(resourceType, resourceId);
+  }
+
+  private async applyCascade(event: CascadePermissionsToFoldersEvent): Promise<void> {
+    for (const folderId of event.folderIds) {
+      if (event.action === 'grant' && event.permissionLevel) {
+        await this.upsertPermission(
+          event.subjectType,
+          event.subjectId,
+          ResourceType.FOLDER,
+          folderId,
+          event.permissionLevel,
+        );
+      } else if (event.action === 'revoke') {
+        await this.deletePermissionBySubject(
+          event.subjectType,
+          event.subjectId,
+          ResourceType.FOLDER,
+          folderId,
+        );
+      }
+    }
+  }
+
+  private async inheritFromParent(parentFolderId: string, childFolderId: string): Promise<void> {
+    const parentPermissions = await this.permissionRepository.find({
+      where: { resourceType: ResourceType.FOLDER, resourceId: parentFolderId },
+    });
+
+    for (const permission of parentPermissions) {
+      await this.permissionRepository.save(
+        this.permissionRepository.create({
+          subjectType: permission.subjectType,
+          subjectId: permission.subjectId,
+          resourceType: ResourceType.FOLDER,
+          resourceId: childFolderId,
+          permission: permission.permission,
+        }),
+      );
+    }
   }
 
   private async invalidateResourceCache(resourceType: ResourceType, resourceId: string): Promise<void> {
