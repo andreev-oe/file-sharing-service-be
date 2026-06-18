@@ -148,7 +148,7 @@ export class FoldersService {
       .getMany();
 
     for (const descendant of descendants) {
-      const updatedPath = newPath + descendant.path.substring(oldPath.length);
+      const updatedPath = `${newPath}${descendant.path.substring(oldPath.length)}`;
       await this.folderRepository.update(descendant.id, { path: updatedPath });
     }
   }
