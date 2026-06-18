@@ -23,6 +23,8 @@ const MAX_FOLDER_DEPTH = 10;
 const FOLDER_TREE_CACHE_TTL_SECONDS = 600;
 const FOLDER_TREE_CACHE_KEY_PREFIX = 'folder:tree:';
 const TOTAL_SIZE_COLUMN = 'total_size';
+const SIZE_TO_SUBTRACT_PARAM = 'sizeToSubtract';
+const SIZE_DELTA_PARAM = 'sizeDelta';
 
 @Injectable()
 export class FoldersService implements OnModuleInit, OnModuleDestroy {
@@ -147,10 +149,10 @@ export class FoldersService implements OnModuleInit, OnModuleDestroy {
         .update(Folder)
         .set({
           totalSize: () => {
-            return `"${TOTAL_SIZE_COLUMN}" - :sizeToSubtract`;
+            return `"${TOTAL_SIZE_COLUMN}" - :${SIZE_TO_SUBTRACT_PARAM}`;
           },
         })
-        .setParameter('sizeToSubtract', sizeToSubtract)
+        .setParameter(SIZE_TO_SUBTRACT_PARAM, sizeToSubtract)
         .where(':folderPath LIKE CONCAT(path, :suffix)', {
           folderPath: folder.path,
           suffix: '/%',
@@ -186,10 +188,10 @@ export class FoldersService implements OnModuleInit, OnModuleDestroy {
       .update(Folder)
       .set({
         totalSize: () => {
-          return `"${TOTAL_SIZE_COLUMN}" + :sizeDelta`;
+          return `"${TOTAL_SIZE_COLUMN}" + :${SIZE_DELTA_PARAM}`;
         },
       })
-      .setParameter('sizeDelta', event.sizeDelta)
+      .setParameter(SIZE_DELTA_PARAM, event.sizeDelta)
       .where('id = :folderId', { folderId: event.folderId })
       .orWhere(':folderPath LIKE CONCAT(path, :suffix)', {
         folderPath: folder.path,
