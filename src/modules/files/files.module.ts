@@ -5,6 +5,7 @@ import { ConfigModule, ConfigType } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import redisConfig from '../../config/redis.config';
 import { StorageModule } from '../../infrastructure/storage/storage.module';
+import { EventsModule } from '../../infrastructure/events/events.module';
 import { CLEANUP_QUEUE, CleanupProcessor } from '../../jobs/cleanup.processor';
 import { FilesController } from './files.controller';
 import { FilesService } from './files.service';
@@ -16,6 +17,7 @@ const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
   imports: [
     TypeOrmModule.forFeature([File]),
     StorageModule,
+    EventsModule,
     ConfigModule.forFeature(redisConfig),
     BullModule.registerQueueAsync({
       name: CLEANUP_QUEUE,

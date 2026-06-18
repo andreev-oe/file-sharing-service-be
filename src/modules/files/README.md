@@ -27,6 +27,7 @@
 4. Генерирует `fileId = crypto.randomUUID()`, строит ключ S3: `files/{uploadedById}/{fileId}/{originalname}`
 5. Загружает буфер в S3 через `StorageService`
 6. Сохраняет метаданные в PostgreSQL. Если сохранение падает — удаляет объект из S3 (`StorageService.delete`), после чего пробрасывает исходное исключение (rollback S3 при ошибке DB)
+7. Если файл загружен в папку (`folderId !== null`), эмитит `fileStorageChanged` через `EventBus` с `sizeDelta = +file.size`. `FoldersService` обновляет `totalSize` у папки и всех её предков.
 
 ### `findByFolder(folderId, uploadedById)`
 Возвращает файлы пользователя в указанной папке. `folderId = null` — файлы в корне. Используется эндпоинтом `GET /files?folderId=:id`.
@@ -38,10 +39,10 @@
 Проверяет наличие URL в Redis (`file:download:{id}`). При попадании в кэш возвращает сразу. При промахе — запрашивает presigned URL у S3 на 1 час, сохраняет в Redis на 50 минут (TTL кэша меньше TTL ссылки, чтобы не отдавать просроченный URL).
 
 ### `update(id, uploadedById, dto)`
-Переименование и/или перемещение в одном запросе. Обновляет только переданные поля. При изменении `folderId` инвалидирует кэш presigned URL. `folderId: null` перемещает файл в корень.
+Переименование и/или перемещение в одном запросе. Обновляет только переданные поля. При изменении `folderId` инвалидирует кэш presigned URL. `folderId: null` перемещает файл в корень. Если `folderId` изменился — эмитит `fileStorageChanged`: `sizeDelta = -file.size` для старой папки и `sizeDelta = +file.size` для новой (каждая из которых может быть `null`, в этом случае событие не эмитится для корня).
 
 ### `softDelete(id, uploadedById)`
-Проверяет владение файлом, ставит `isDeleted = true`, инвалидирует кэш presigned URL.
+Проверяет владение файлом, ставит `isDeleted = true`, инвалидирует кэш presigned URL. Если файл был в папке — эмитит `fileStorageChanged` с `sizeDelta = -file.size`.
 
 ### `getVersions(id, uploadedById)`
 Возвращает все версии файла: записи с тем же `name` + `folderId` + `uploadedById`. Сортировка по `version DESC`.

@@ -26,6 +26,21 @@
 
 После сохранения инвалидирует кэш дерева (`folder:tree:{ownerId}`) и эмитит событие `folderCreated` через `EventBus`. `PermissionsService` подписан на это событие и автоматически копирует все права родительской папки в дочернюю.
 
+### Подсчёт размера папки
+
+`FoldersService` подписан на событие `fileStorageChanged` из `EventBus`. При загрузке, удалении или перемещении файла `FilesService` эмитит событие с `{ folderId, sizeDelta }`. `FoldersService` применяет `sizeDelta` ко всему предковому пути одним `UPDATE`:
+
+```sql
+UPDATE folders SET total_size = total_size + :sizeDelta
+WHERE id = :folderId OR :folderPath LIKE CONCAT(path, '/%')
+```
+
+Это обновляет как саму папку, так и всех предков. `totalSize` на Folder entity содержит рекурсивный размер — запрос O(1) без рекурсии.
+
+При мягком удалении папки `totalSize` удалённого поддерева сбрасывается в 0, а из предков вычитается.
+
+`totalSize` доступен через `GET /folders/tree` в поле `totalSize` каждого узла (с учётом кэша 10 мин).
+
 ### Каскадное обновление прав
 
 `FoldersService` подписан на событие `permissionChangedOnFolder` из `EventBus`. Когда `PermissionsService` выдаёт или отзывает права на папку, `FoldersService` находит все дочерние папки по материализованному пути (`path LIKE '{path}/%'`) и эмитит `cascadePermissionsToFolders` с их ID. `PermissionsService` применяет изменение к каждому потомку.
@@ -49,7 +64,7 @@
 После обновления инвалидирует кэш дерева.
 
 ### `softDelete(id, ownerId)`
-Помечает `isDeleted = true` для самой папки и всех потомков одним `UPDATE`. Потомки находятся через `path LIKE '{folder.path}/%'`. После удаления инвалидирует кэш дерева.
+Помечает `isDeleted = true` для самой папки и всех потомков одним `UPDATE`, одновременно сбрасывая их `totalSize` в 0. Затем вычитает сохранённый `totalSize` из всех живых предков (второй `UPDATE`). После удаления инвалидирует кэш дерева.
 
 ### `search(ownerId, query)`
 Поиск по полю `name` через `ILIKE '%query%'`. Возвращает папки пользователя, совпадающие с запросом.

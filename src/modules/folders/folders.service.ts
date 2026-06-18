@@ -13,6 +13,7 @@ import { Repository } from 'typeorm';
 import { REDIS } from '../../infrastructure/cache/redis.provider';
 import { EventBus } from '../../infrastructure/events/event-bus';
 import type { PermissionChangedOnFolderEvent } from '../../infrastructure/events/permission-changed-on-folder.event';
+import type { FileStorageChangedEvent } from '../../infrastructure/events/file-storage-changed.event';
 import { Folder } from './entities/folder.entity';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { UpdateFolderDto } from './dto/update-folder.dto';
@@ -25,6 +26,7 @@ const FOLDER_TREE_CACHE_KEY_PREFIX = 'folder:tree:';
 @Injectable()
 export class FoldersService implements OnModuleInit, OnModuleDestroy {
   private permissionChangedSubscription: Subscription;
+  private fileStorageChangedSubscription: Subscription;
 
   constructor(
     @InjectRepository(Folder)
@@ -39,10 +41,16 @@ export class FoldersService implements OnModuleInit, OnModuleDestroy {
         await this.handlePermissionChangedOnFolder(event);
       },
     );
+    this.fileStorageChangedSubscription = this.eventBus.fileStorageChanged.subscribe(
+      async (event) => {
+        await this.applyFileSizeChange(event);
+      },
+    );
   }
 
   onModuleDestroy() {
     this.permissionChangedSubscription.unsubscribe();
+    this.fileStorageChangedSubscription.unsubscribe();
   }
 
   async create(ownerId: string, dto: CreateFolderDto): Promise<Folder> {
@@ -118,17 +126,32 @@ export class FoldersService implements OnModuleInit, OnModuleDestroy {
 
   async softDelete(id: string, ownerId: string): Promise<void> {
     const folder = await this.findOwnedOrFail(id, ownerId);
+    const sizeToSubtract = folder.totalSize;
 
     await this.folderRepository
       .createQueryBuilder()
       .update(Folder)
-      .set({ isDeleted: true })
+      .set({ isDeleted: true, totalSize: 0 })
       .where('ownerId = :ownerId', { ownerId })
       .andWhere('(id = :id OR path LIKE :pathPrefix)', {
         id,
         pathPrefix: `${folder.path}/%`,
       })
       .execute();
+
+    if (sizeToSubtract > 0) {
+      await this.folderRepository
+        .createQueryBuilder()
+        .update(Folder)
+        .set({ totalSize: () => `"total_size" - :sizeToSubtract` })
+        .setParameter('sizeToSubtract', sizeToSubtract)
+        .where(':folderPath LIKE CONCAT(path, :suffix)', {
+          folderPath: folder.path,
+          suffix: '/%',
+        })
+        .andWhere('isDeleted = :isDeleted', { isDeleted: false })
+        .execute();
+    }
 
     await this.invalidateTreeCache(ownerId);
   }
@@ -141,6 +164,28 @@ export class FoldersService implements OnModuleInit, OnModuleDestroy {
       .andWhere('folder.name ILIKE :query', { query: `%${query}%` })
       .orderBy('folder.name', 'ASC')
       .getMany();
+  }
+
+  private async applyFileSizeChange(event: FileStorageChangedEvent): Promise<void> {
+    const folder = await this.folderRepository.findOne({
+      where: { id: event.folderId },
+      select: { path: true },
+    });
+    if (!folder) {
+      return;
+    }
+
+    await this.folderRepository
+      .createQueryBuilder()
+      .update(Folder)
+      .set({ totalSize: () => `"total_size" + :sizeDelta` })
+      .setParameter('sizeDelta', event.sizeDelta)
+      .where('id = :folderId', { folderId: event.folderId })
+      .orWhere(':folderPath LIKE CONCAT(path, :suffix)', {
+        folderPath: folder.path,
+        suffix: '/%',
+      })
+      .execute();
   }
 
   private async handlePermissionChangedOnFolder(event: PermissionChangedOnFolderEvent): Promise<void> {

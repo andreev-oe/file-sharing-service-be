@@ -5,6 +5,7 @@ export class FolderTreeNodeDto {
   name: string;
   parentId: string | null;
   path: string;
+  totalSize: number;
   createdAt: Date;
   updatedAt: Date;
   children: FolderTreeNodeDto[];
@@ -15,6 +16,7 @@ export class FolderTreeNodeDto {
     node.name = folder.name;
     node.parentId = folder.parentId;
     node.path = folder.path;
+    node.totalSize = folder.totalSize;
     node.createdAt = folder.createdAt;
     node.updatedAt = folder.updatedAt;
     node.children = children;

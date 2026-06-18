@@ -10,6 +10,7 @@ import { IsNull, Repository } from 'typeorm';
 import type Redis from 'ioredis';
 import { REDIS } from '../../infrastructure/cache/redis.provider';
 import { StorageService } from '../../infrastructure/storage/storage.service';
+import { EventBus } from '../../infrastructure/events/event-bus';
 import { File } from './entities/file.entity';
 import { UpdateFileDto } from './dto/update-file.dto';
 
@@ -48,6 +49,7 @@ export class FilesService {
     private readonly fileRepository: Repository<File>,
     private readonly storageService: StorageService,
     @Inject(REDIS) private readonly redis: Redis,
+    private readonly eventBus: EventBus,
   ) {}
 
   async upload(
@@ -84,7 +86,11 @@ export class FilesService {
         uploadedById,
         version: nextVersion,
       });
-      return await this.fileRepository.save(file);
+      const saved = await this.fileRepository.save(file);
+      if (resolvedFolderId !== null) {
+        this.eventBus.fileStorageChanged.next({ folderId: resolvedFolderId, sizeDelta: saved.size });
+      }
+      return saved;
     } catch (error) {
       await this.storageService.delete(s3Key);
       throw error;
@@ -135,13 +141,26 @@ export class FilesService {
     }
 
     await this.fileRepository.update(id, updatedFields);
+
+    if (dto.folderId !== undefined && dto.folderId !== file.folderId) {
+      if (file.folderId !== null) {
+        this.eventBus.fileStorageChanged.next({ folderId: file.folderId, sizeDelta: -file.size });
+      }
+      if (dto.folderId !== null) {
+        this.eventBus.fileStorageChanged.next({ folderId: dto.folderId, sizeDelta: file.size });
+      }
+    }
+
     return this.findById(id, uploadedById);
   }
 
   async softDelete(id: string, uploadedById: string): Promise<void> {
-    await this.findById(id, uploadedById);
+    const file = await this.findById(id, uploadedById);
     await this.fileRepository.update(id, { isDeleted: true });
     await this.invalidateDownloadUrlCache(id);
+    if (file.folderId !== null) {
+      this.eventBus.fileStorageChanged.next({ folderId: file.folderId, sizeDelta: -file.size });
+    }
   }
 
   async getVersions(id: string, uploadedById: string): Promise<File[]> {
