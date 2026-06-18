@@ -20,6 +20,7 @@ export enum PermissionLevel {
 export enum SubjectType {
   USER = 'user',
   GROUP = 'group',
+  EVERYONE = 'everyone',
 }
 
 export enum ResourceType {

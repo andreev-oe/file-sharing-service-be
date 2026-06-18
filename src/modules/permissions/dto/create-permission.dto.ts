@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsUUID } from 'class-validator';
+import { IsEnum, IsUUID, ValidateIf } from 'class-validator';
 import { PermissionLevel, ResourceType, SubjectType } from '../../../common/enums';
 
 export class CreatePermissionDto {
@@ -7,9 +7,14 @@ export class CreatePermissionDto {
   @IsEnum(SubjectType)
   subjectType: SubjectType;
 
-  @ApiProperty({ example: 'uuid-of-user-or-group' })
+  @ApiProperty({
+    example: 'uuid-of-user-or-group',
+    description: 'Не требуется для subjectType = everyone',
+    required: false,
+  })
+  @ValidateIf((dto: CreatePermissionDto) => { return dto.subjectType !== SubjectType.EVERYONE; })
   @IsUUID()
-  subjectId: string;
+  subjectId?: string;
 
   @ApiProperty({ enum: ResourceType, example: ResourceType.FILE })
   @IsEnum(ResourceType)

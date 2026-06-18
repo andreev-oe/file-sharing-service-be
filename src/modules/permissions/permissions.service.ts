@@ -18,6 +18,7 @@ const PERMISSION_LEVEL_ORDER: Record<PermissionLevel, number> = {
 const PERMISSION_CACHE_TTL_SECONDS = 300;
 const PERMISSION_CACHE_KEY_PREFIX = 'perm:';
 const CACHED_NONE = 'none';
+const EVERYONE_SUBJECT_ID = 'everyone';
 
 function isPermissionLevel(value: string): value is PermissionLevel {
   return Object.values<string>(PermissionLevel).includes(value);
@@ -34,10 +35,12 @@ export class PermissionsService {
   ) {}
 
   async grant(dto: CreatePermissionDto): Promise<Permission> {
+    const subjectId = dto.subjectType === SubjectType.EVERYONE ? EVERYONE_SUBJECT_ID : dto.subjectId ?? '';
+
     const existing = await this.permissionRepository.findOne({
       where: {
         subjectType: dto.subjectType,
-        subjectId: dto.subjectId,
+        subjectId,
         resourceType: dto.resourceType,
         resourceId: dto.resourceId,
       },
@@ -48,7 +51,9 @@ export class PermissionsService {
       existing.permission = dto.permission;
       result = await this.permissionRepository.save(existing);
     } else {
-      result = await this.permissionRepository.save(this.permissionRepository.create(dto));
+      result = await this.permissionRepository.save(
+        this.permissionRepository.create({ ...dto, subjectId }),
+      );
     }
 
     await this.invalidateResourceCache(dto.resourceType, dto.resourceId);
@@ -138,6 +143,9 @@ export class PermissionsService {
               { groupType: SubjectType.GROUP, groupIds },
             );
           }
+          qb.orWhere('permission.subjectType = :everyoneType', {
+            everyoneType: SubjectType.EVERYONE,
+          });
         }),
       );
 
