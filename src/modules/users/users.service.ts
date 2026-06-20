@@ -42,6 +42,10 @@ export class UsersService {
     return this.userRepository.save(user);
   }
 
+  async findAll(): Promise<User[]> {
+    return this.userRepository.find({ order: { name: 'ASC' } });
+  }
+
   async findById(id: string): Promise<User> {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {

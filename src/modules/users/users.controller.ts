@@ -14,6 +14,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiConsumes,
+  ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
@@ -22,6 +23,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UserPublicDto } from './dto/user-public.dto';
 import { User } from './entities/user.entity';
 
 const AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024;
@@ -38,6 +40,16 @@ const AVATAR_ALLOWED_MIME_TYPES = [
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'Получить список всех пользователей' })
+  @ApiOkResponse({ type: [UserPublicDto] })
+  async findAll(): Promise<UserPublicDto[]> {
+    const users = await this.usersService.findAll();
+    return users.map((user) => {
+      return UserPublicDto.fromEntity(user);
+    });
+  }
 
   @Get('me')
   @ApiOperation({ summary: 'Получить профиль текущего пользователя' })
