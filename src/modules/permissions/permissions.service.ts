@@ -1,6 +1,7 @@
 import {
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
@@ -36,6 +37,7 @@ function isPermissionLevel(value: string): value is PermissionLevel {
 
 @Injectable()
 export class PermissionsService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(PermissionsService.name);
   private folderCreatedSubscription: Subscription;
   private fileCreatedSubscription: Subscription;
   private cascadePermissionsSubscription: Subscription;
@@ -52,32 +54,44 @@ export class PermissionsService implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     this.folderCreatedSubscription = this.eventBus.folderCreated.subscribe(
       async (event) => {
-        await this.upsertPermission(
-          SubjectType.USER,
-          event.ownerId,
-          ResourceType.FOLDER,
-          event.folderId,
-          PermissionLevel.MANAGE,
-        );
-        if (event.parentId) {
-          await this.inheritFromParent(event.parentId, event.folderId);
+        try {
+          await this.upsertPermission(
+            SubjectType.USER,
+            event.ownerId,
+            ResourceType.FOLDER,
+            event.folderId,
+            PermissionLevel.MANAGE,
+          );
+          if (event.parentId) {
+            await this.inheritFromParent(event.parentId, event.folderId);
+          }
+        } catch (error) {
+          this.logger.error('folderCreated handler failed', error);
         }
       },
     );
     this.fileCreatedSubscription = this.eventBus.fileCreated.subscribe(
       async (event) => {
-        await this.upsertPermission(
-          SubjectType.USER,
-          event.ownerId,
-          ResourceType.FILE,
-          event.fileId,
-          PermissionLevel.MANAGE,
-        );
+        try {
+          await this.upsertPermission(
+            SubjectType.USER,
+            event.ownerId,
+            ResourceType.FILE,
+            event.fileId,
+            PermissionLevel.MANAGE,
+          );
+        } catch (error) {
+          this.logger.error('fileCreated handler failed', error);
+        }
       },
     );
     this.cascadePermissionsSubscription =
       this.eventBus.cascadePermissionsToFolders.subscribe(async (event) => {
-        await this.applyCascade(event);
+        try {
+          await this.applyCascade(event);
+        } catch (error) {
+          this.logger.error('cascadePermissions handler failed', error);
+        }
       });
   }
 

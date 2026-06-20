@@ -54,7 +54,9 @@ export class CleanupProcessor extends WorkerHost {
       .take(CLEANUP_BATCH_SIZE)
       .getMany();
 
-    this.logger.log(`Cleanup: found ${deletedFolders.length} folders to delete`);
+    this.logger.log(
+      `Cleanup: found ${deletedFolders.length} folders to delete`,
+    );
 
     for (const folder of deletedFolders) {
       await this.entityManager.delete(Folder, folder.id);

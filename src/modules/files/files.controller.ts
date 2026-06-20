@@ -25,7 +25,7 @@ import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
-import { PermissionLevel, ResourceType } from '../../common/enums';
+import { PermissionLevel, ResourceType, UserRole } from '../../common/enums';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
 import { FilesService } from './files.service';
@@ -67,7 +67,11 @@ export class FilesController {
     @CurrentUser() user: User,
     @Query('folderId') folderId?: string,
   ) {
-    return this.filesService.findByFolder(folderId ?? null, user.id);
+    return this.filesService.findByFolder(
+      folderId ?? null,
+      user.id,
+      user.role === UserRole.ADMIN,
+    );
   }
 
   @Get('search')

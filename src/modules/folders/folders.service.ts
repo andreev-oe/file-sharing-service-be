@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
@@ -30,6 +31,7 @@ const SIZE_DELTA_PARAM = 'sizeDelta';
 
 @Injectable()
 export class FoldersService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(FoldersService.name);
   private permissionChangedSubscription: Subscription;
   private fileStorageChangedSubscription: Subscription;
 
@@ -43,11 +45,19 @@ export class FoldersService implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     this.permissionChangedSubscription =
       this.eventBus.permissionChangedOnFolder.subscribe(async (event) => {
-        await this.handlePermissionChangedOnFolder(event);
+        try {
+          await this.handlePermissionChangedOnFolder(event);
+        } catch (error) {
+          this.logger.error('handlePermissionChangedOnFolder failed', error);
+        }
       });
     this.fileStorageChangedSubscription =
       this.eventBus.fileStorageChanged.subscribe(async (event) => {
-        await this.applyFileSizeChange(event);
+        try {
+          await this.applyFileSizeChange(event);
+        } catch (error) {
+          this.logger.error('applyFileSizeChange failed', error);
+        }
       });
   }
 

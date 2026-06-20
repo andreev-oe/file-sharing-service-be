@@ -28,12 +28,10 @@ export class PermissionsGuard implements CanActivate {
       return true;
     }
 
-    const request = context
-      .switchToHttp()
-      .getRequest<{
-        user: { id: string; role: UserRole };
-        params: Record<string, string>;
-      }>();
+    const request = context.switchToHttp().getRequest<{
+      user: { id: string; role: UserRole };
+      params: Record<string, string>;
+    }>();
 
     if (request.user.role === UserRole.ADMIN) {
       return true;

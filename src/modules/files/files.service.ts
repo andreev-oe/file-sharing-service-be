@@ -211,9 +211,14 @@ export class FilesService {
   async findByFolder(
     folderId: string | null,
     uploadedById: string,
+    isAdmin: boolean,
   ): Promise<File[]> {
     return this.fileRepository.find({
-      where: { folderId: folderId ?? IsNull(), uploadedById, isDeleted: false },
+      where: {
+        folderId: folderId ?? IsNull(),
+        ...(isAdmin ? {} : { uploadedById }),
+        isDeleted: false,
+      },
       order: { name: 'ASC' },
     });
   }

@@ -547,14 +547,35 @@ async function upsertShareLink(
 }
 
 async function clearDatabase(dataSource: DataSource): Promise<void> {
-  await dataSource.getRepository(ShareLink).createQueryBuilder().delete().execute();
+  await dataSource
+    .getRepository(ShareLink)
+    .createQueryBuilder()
+    .delete()
+    .execute();
   await dataSource.getRepository(Note).createQueryBuilder().delete().execute();
-  await dataSource.getRepository(Permission).createQueryBuilder().delete().execute();
-  await dataSource.getRepository(GroupMember).createQueryBuilder().delete().execute();
+  await dataSource
+    .getRepository(Permission)
+    .createQueryBuilder()
+    .delete()
+    .execute();
+  await dataSource
+    .getRepository(GroupMember)
+    .createQueryBuilder()
+    .delete()
+    .execute();
   await dataSource.getRepository(Group).createQueryBuilder().delete().execute();
   await dataSource.getRepository(File).createQueryBuilder().delete().execute();
-  await dataSource.getRepository(Folder).createQueryBuilder().update(Folder).set({ parentId: null }).execute();
-  await dataSource.getRepository(Folder).createQueryBuilder().delete().execute();
+  await dataSource
+    .getRepository(Folder)
+    .createQueryBuilder()
+    .update(Folder)
+    .set({ parentId: null })
+    .execute();
+  await dataSource
+    .getRepository(Folder)
+    .createQueryBuilder()
+    .delete()
+    .execute();
   await dataSource.getRepository(User).createQueryBuilder().delete().execute();
 }
 
