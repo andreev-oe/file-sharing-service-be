@@ -73,7 +73,10 @@ export class FilesService {
 
     this.validateMimeType(uploadedFile.mimetype);
 
-    const originalName = Buffer.from(uploadedFile.originalname, 'latin1').toString('utf8');
+    const originalName = Buffer.from(
+      uploadedFile.originalname,
+      'latin1',
+    ).toString('utf8');
     const resolvedFolderId = folderId ?? null;
     const nextVersion = await this.resolveNextVersion(
       originalName,
@@ -118,7 +121,11 @@ export class FilesService {
     }
   }
 
-  async findByIds(ids: string[], uploadedById: string, isAdmin: boolean): Promise<File[]> {
+  async findByIds(
+    ids: string[],
+    uploadedById: string,
+    isAdmin: boolean,
+  ): Promise<File[]> {
     if (ids.length === 0) {
       return [];
     }
@@ -254,9 +261,8 @@ export class FilesService {
     uploadedById: string,
     isAdmin: boolean,
   ): Promise<File[]> {
-    const folderFilter = isAdmin && folderId === null
-      ? {}
-      : { folderId: folderId ?? IsNull() };
+    const folderFilter =
+      isAdmin && folderId === null ? {} : { folderId: folderId ?? IsNull() };
 
     return this.fileRepository.find({
       where: {

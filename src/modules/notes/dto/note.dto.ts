@@ -43,7 +43,10 @@ export class PaginatedNotesDto {
   @ApiProperty({ example: 42 })
   total: number;
 
-  static fromResult(result: { data: Note[]; total: number }): PaginatedNotesDto {
+  static fromResult(result: {
+    data: Note[];
+    total: number;
+  }): PaginatedNotesDto {
     const dto = new PaginatedNotesDto();
     dto.data = result.data.map((note) => {
       return NoteDto.fromEntity(note);

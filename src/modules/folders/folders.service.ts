@@ -128,7 +128,11 @@ export class FoldersService implements OnModuleInit, OnModuleDestroy {
     return tree;
   }
 
-  async findByIds(ids: string[], ownerId: string, isAdmin: boolean): Promise<Folder[]> {
+  async findByIds(
+    ids: string[],
+    ownerId: string,
+    isAdmin: boolean,
+  ): Promise<Folder[]> {
     if (ids.length === 0) {
       return [];
     }

@@ -69,7 +69,11 @@ export class NotesController {
     @Query('page') page = DEFAULT_PAGE,
     @Query('limit') limit = DEFAULT_PAGE_LIMIT,
   ): Promise<PaginatedNotesDto> {
-    const result = await this.notesService.findByFile(fileId, Number(page), Number(limit));
+    const result = await this.notesService.findByFile(
+      fileId,
+      Number(page),
+      Number(limit),
+    );
     return PaginatedNotesDto.fromResult(result);
   }
 
@@ -89,7 +93,10 @@ export class NotesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Удалить заметку' })
   @ApiNoContentResponse({ description: 'Заметка удалена' })
-  remove(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
+  remove(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
     return this.notesService.remove(id, user.id);
   }
 }

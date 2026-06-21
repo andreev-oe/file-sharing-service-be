@@ -12,7 +12,12 @@ export class ShareLinkDto {
   @ApiProperty({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
   createdById: string;
 
-  @ApiProperty({ type: 'string', format: 'date-time', example: '2024-01-15T11:00:00.000Z', nullable: true })
+  @ApiProperty({
+    type: 'string',
+    format: 'date-time',
+    example: '2024-01-15T11:00:00.000Z',
+    nullable: true,
+  })
   expiresAt: Date | null;
 
   @ApiProperty({ type: 'number', example: 10, nullable: true })
@@ -27,7 +32,11 @@ export class ShareLinkDto {
   @ApiProperty({ example: '2024-01-15T10:00:00.000Z' })
   createdAt: Date;
 
-  @ApiPropertyOptional({ type: () => FileDto })
+  @ApiPropertyOptional({
+    type: () => {
+      return FileDto;
+    },
+  })
   file?: FileDto;
 
   static fromEntity(link: ShareLink): ShareLinkDto {

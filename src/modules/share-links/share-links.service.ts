@@ -78,7 +78,10 @@ export class ShareLinksService {
     return this.validateLink(token, password);
   }
 
-  async getDownloadUrl(token: string, password?: string): Promise<{ url: string }> {
+  async getDownloadUrl(
+    token: string,
+    password?: string,
+  ): Promise<{ url: string }> {
     const link = await this.validateLink(token, password);
     await this.shareLinkRepository.increment({ token }, 'downloadCount', 1);
     const url = await this.storageService.getPresignedUrl(
@@ -101,7 +104,10 @@ export class ShareLinksService {
     await this.shareLinkRepository.update(id, { isActive: false });
   }
 
-  private async validateLink(token: string, password?: string): Promise<ShareLink> {
+  private async validateLink(
+    token: string,
+    password?: string,
+  ): Promise<ShareLink> {
     const link = await this.shareLinkRepository.findOne({
       where: { token },
       relations: { file: true },

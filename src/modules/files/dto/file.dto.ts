@@ -14,7 +14,12 @@ export class FileDto {
   @ApiProperty({ example: 204800 })
   size: number;
 
-  @ApiProperty({ type: 'string', format: 'uuid', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', nullable: true })
+  @ApiProperty({
+    type: 'string',
+    format: 'uuid',
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    nullable: true,
+  })
   folderId: string | null;
 
   @ApiProperty({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })

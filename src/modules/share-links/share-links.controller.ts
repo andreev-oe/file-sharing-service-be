@@ -83,7 +83,8 @@ export class ShareLinksController {
 
   @Get(':token')
   @ApiOperation({
-    summary: 'Получить метаданные файла по публичной ссылке (с опциональным паролем)',
+    summary:
+      'Получить метаданные файла по публичной ссылке (с опциональным паролем)',
   })
   @ApiOkResponse({ type: ShareLinkDto })
   async findByToken(

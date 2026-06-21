@@ -37,7 +37,9 @@ export class GroupsController {
   constructor(private readonly groupsService: GroupsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Получить список групп (все — для admin, свои — для остальных)' })
+  @ApiOperation({
+    summary: 'Получить список групп (все — для admin, свои — для остальных)',
+  })
   @ApiOkResponse({ type: [GroupDto] })
   async findAll(@CurrentUser() user: User): Promise<GroupDto[]> {
     const groups = await this.groupsService.findAll(user.id, user.role);
@@ -82,7 +84,9 @@ export class GroupsController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Удалить группу (только owner или системный admin)' })
+  @ApiOperation({
+    summary: 'Удалить группу (только owner или системный admin)',
+  })
   @ApiNoContentResponse({ description: 'Группа удалена' })
   delete(
     @CurrentUser() user: User,

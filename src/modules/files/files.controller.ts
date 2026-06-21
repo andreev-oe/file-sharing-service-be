@@ -65,12 +65,18 @@ export class FilesController {
     @UploadedFile() uploadedFile: Express.Multer.File,
     @Query('folderId') folderId?: string,
   ): Promise<FileDto> {
-    const file = await this.filesService.upload(user.id, uploadedFile, folderId);
+    const file = await this.filesService.upload(
+      user.id,
+      uploadedFile,
+      folderId,
+    );
     return FileDto.fromEntity(file);
   }
 
   @Get('bulk')
-  @ApiOperation({ summary: 'Получить имена файлов по списку ID (через запятую)' })
+  @ApiOperation({
+    summary: 'Получить имена файлов по списку ID (через запятую)',
+  })
   @ApiOkResponse({ type: [FileNameDto] })
   async findByIds(
     @CurrentUser() user: User,
@@ -81,9 +87,15 @@ export class FilesController {
       throw new BadRequestException('Укажите ids через запятую');
     }
     if (ids.length > MAX_BULK_IDS) {
-      throw new BadRequestException(`Максимум ${MAX_BULK_IDS} ID за один запрос`);
+      throw new BadRequestException(
+        `Максимум ${MAX_BULK_IDS} ID за один запрос`,
+      );
     }
-    const files = await this.filesService.findByIds(ids, user.id, user.role === UserRole.ADMIN);
+    const files = await this.filesService.findByIds(
+      ids,
+      user.id,
+      user.role === UserRole.ADMIN,
+    );
     return files.map((file) => {
       return FileNameDto.fromEntity(file);
     });
@@ -115,7 +127,11 @@ export class FilesController {
     @CurrentUser() user: User,
     @Query('q') query: string,
   ): Promise<FileDto[]> {
-    const files = await this.filesService.search(user.id, query, user.role === UserRole.ADMIN);
+    const files = await this.filesService.search(
+      user.id,
+      query,
+      user.role === UserRole.ADMIN,
+    );
     return files.map((file) => {
       return FileDto.fromEntity(file);
     });
@@ -130,7 +146,11 @@ export class FilesController {
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<FileDto> {
-    const file = await this.filesService.findById(id, user.id, user.role === UserRole.ADMIN);
+    const file = await this.filesService.findById(
+      id,
+      user.id,
+      user.role === UserRole.ADMIN,
+    );
     return FileDto.fromEntity(file);
   }
 
@@ -181,7 +201,12 @@ export class FilesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateFileDto,
   ): Promise<FileDto> {
-    const file = await this.filesService.update(id, user.id, user.role === UserRole.ADMIN, dto);
+    const file = await this.filesService.update(
+      id,
+      user.id,
+      user.role === UserRole.ADMIN,
+      dto,
+    );
     return FileDto.fromEntity(file);
   }
 

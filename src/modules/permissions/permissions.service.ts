@@ -108,17 +108,28 @@ export class PermissionsService implements OnModuleInit, OnModuleDestroy {
     resourceId?: string;
     permission?: PermissionLevel;
   }): Promise<Permission[]> {
-    const resolvedSubjectId = filter.subjectType === SubjectType.EVERYONE
-      ? EVERYONE_SUBJECT_ID
-      : filter.subjectId;
+    const resolvedSubjectId =
+      filter.subjectType === SubjectType.EVERYONE
+        ? EVERYONE_SUBJECT_ID
+        : filter.subjectId;
 
     return this.permissionRepository.find({
       where: {
-        ...(filter.subjectType !== undefined ? { subjectType: filter.subjectType } : {}),
-        ...(resolvedSubjectId !== undefined ? { subjectId: resolvedSubjectId } : {}),
-        ...(filter.resourceType !== undefined ? { resourceType: filter.resourceType } : {}),
-        ...(filter.resourceId !== undefined ? { resourceId: filter.resourceId } : {}),
-        ...(filter.permission !== undefined ? { permission: filter.permission } : {}),
+        ...(filter.subjectType !== undefined
+          ? { subjectType: filter.subjectType }
+          : {}),
+        ...(resolvedSubjectId !== undefined
+          ? { subjectId: resolvedSubjectId }
+          : {}),
+        ...(filter.resourceType !== undefined
+          ? { resourceType: filter.resourceType }
+          : {}),
+        ...(filter.resourceId !== undefined
+          ? { resourceId: filter.resourceId }
+          : {}),
+        ...(filter.permission !== undefined
+          ? { permission: filter.permission }
+          : {}),
       },
       order: { createdAt: 'ASC' },
     });

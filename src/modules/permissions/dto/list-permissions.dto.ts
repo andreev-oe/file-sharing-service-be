@@ -1,6 +1,10 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsUUID } from 'class-validator';
-import { PermissionLevel, ResourceType, SubjectType } from '../../../common/enums';
+import {
+  PermissionLevel,
+  ResourceType,
+  SubjectType,
+} from '../../../common/enums';
 
 export class ListPermissionsQueryDto {
   @ApiPropertyOptional({ enum: SubjectType })

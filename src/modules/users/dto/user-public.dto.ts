@@ -14,7 +14,11 @@ export class UserPublicDto {
   @ApiProperty({ type: 'string', example: 'Backend engineer', nullable: true })
   bio: string | null;
 
-  @ApiProperty({ type: 'string', example: 'https://example.com/avatar.jpg', nullable: true })
+  @ApiProperty({
+    type: 'string',
+    example: 'https://example.com/avatar.jpg',
+    nullable: true,
+  })
   avatarUrl: string | null;
 
   static fromEntity(user: User): UserPublicDto {

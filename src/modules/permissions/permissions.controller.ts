@@ -39,7 +39,8 @@ export class PermissionsController {
 
   @Get()
   @ApiOperation({
-    summary: 'Список разрешений по субъекту (user/group) или ресурсу (file/folder)',
+    summary:
+      'Список разрешений по субъекту (user/group) или ресурсу (file/folder)',
   })
   @ApiOkResponse({ type: [PermissionDto] })
   async list(
@@ -47,9 +48,12 @@ export class PermissionsController {
     @Query() query: ListPermissionsQueryDto,
   ): Promise<PermissionDto[]> {
     const isAdmin = user.role === UserRole.ADMIN;
-    const hasSubjectFilter = query.subjectType !== undefined &&
-      (query.subjectId !== undefined || query.subjectType === SubjectType.EVERYONE);
-    const hasResourceFilter = query.resourceType !== undefined && query.resourceId !== undefined;
+    const hasSubjectFilter =
+      query.subjectType !== undefined &&
+      (query.subjectId !== undefined ||
+        query.subjectType === SubjectType.EVERYONE);
+    const hasResourceFilter =
+      query.resourceType !== undefined && query.resourceId !== undefined;
 
     if (!hasSubjectFilter && !hasResourceFilter) {
       throw new BadRequestException(
@@ -58,7 +62,11 @@ export class PermissionsController {
     }
 
     if (!isAdmin) {
-      if (!hasSubjectFilter || query.subjectType !== SubjectType.USER || query.subjectId !== user.id) {
+      if (
+        !hasSubjectFilter ||
+        query.subjectType !== SubjectType.USER ||
+        query.subjectId !== user.id
+      ) {
         throw new ForbiddenException('Доступ запрещён');
       }
     }

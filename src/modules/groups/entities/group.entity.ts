@@ -24,10 +24,19 @@ export class Group {
   @Column()
   ownerId: string;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => {
+    return User;
+  })
   owner: User;
 
-  @OneToMany(() => GroupMember, (member) => member.group)
+  @OneToMany(
+    () => {
+      return GroupMember;
+    },
+    (member) => {
+      return member.group;
+    },
+  )
   members: GroupMember[];
 
   memberCount?: number;

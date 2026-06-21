@@ -17,7 +17,14 @@ export class GroupMember {
   @Column()
   groupId: string;
 
-  @ManyToOne(() => Group, (group) => group.members)
+  @ManyToOne(
+    () => {
+      return Group;
+    },
+    (group) => {
+      return group.members;
+    },
+  )
   group: Group;
 
   @Column()

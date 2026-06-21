@@ -9,13 +9,21 @@ export class GroupDto {
   @ApiProperty({ example: 'Команда разработки' })
   name: string;
 
-  @ApiProperty({ type: 'string', example: 'Группа для обмена файлами команды', nullable: true })
+  @ApiProperty({
+    type: 'string',
+    example: 'Группа для обмена файлами команды',
+    nullable: true,
+  })
   description: string | null;
 
   @ApiProperty({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
   ownerId: string;
 
-  @ApiPropertyOptional({ type: () => UserPublicDto })
+  @ApiPropertyOptional({
+    type: () => {
+      return UserPublicDto;
+    },
+  })
   owner?: UserPublicDto;
 
   @ApiProperty({ example: 5 })

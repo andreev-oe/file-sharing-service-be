@@ -19,7 +19,11 @@ export class GroupMemberDto {
   @ApiProperty({ example: '2024-01-15T10:00:00.000Z' })
   createdAt: Date;
 
-  @ApiPropertyOptional({ type: () => UserPublicDto })
+  @ApiPropertyOptional({
+    type: () => {
+      return UserPublicDto;
+    },
+  })
   user?: UserPublicDto;
 
   static fromEntity(member: GroupMember): GroupMemberDto {

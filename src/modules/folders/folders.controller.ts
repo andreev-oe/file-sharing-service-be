@@ -54,7 +54,9 @@ export class FoldersController {
   }
 
   @Get('bulk')
-  @ApiOperation({ summary: 'Получить имена папок по списку ID (через запятую)' })
+  @ApiOperation({
+    summary: 'Получить имена папок по списку ID (через запятую)',
+  })
   @ApiOkResponse({ type: [FolderNameDto] })
   async findByIds(
     @CurrentUser() user: User,
@@ -65,9 +67,15 @@ export class FoldersController {
       throw new BadRequestException('Укажите ids через запятую');
     }
     if (ids.length > MAX_BULK_IDS) {
-      throw new BadRequestException(`Максимум ${MAX_BULK_IDS} ID за один запрос`);
+      throw new BadRequestException(
+        `Максимум ${MAX_BULK_IDS} ID за один запрос`,
+      );
     }
-    const folders = await this.foldersService.findByIds(ids, user.id, user.role === UserRole.ADMIN);
+    const folders = await this.foldersService.findByIds(
+      ids,
+      user.id,
+      user.role === UserRole.ADMIN,
+    );
     return folders.map((folder) => {
       return FolderNameDto.fromEntity(folder);
     });

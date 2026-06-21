@@ -23,7 +23,10 @@ export class GroupsService {
     private readonly groupMemberRepository: Repository<GroupMember>,
   ) {}
 
-  async findAll(requesterId: string, requesterRole: UserRole): Promise<Group[]> {
+  async findAll(
+    requesterId: string,
+    requesterRole: UserRole,
+  ): Promise<Group[]> {
     const builder = this.groupRepository
       .createQueryBuilder('group')
       .leftJoinAndSelect('group.owner', 'owner')
@@ -46,7 +49,11 @@ export class GroupsService {
     return entities;
   }
 
-  async findById(groupId: string, requesterId: string, requesterRole: UserRole): Promise<Group> {
+  async findById(
+    groupId: string,
+    requesterId: string,
+    requesterRole: UserRole,
+  ): Promise<Group> {
     const builder = this.groupRepository
       .createQueryBuilder('group')
       .leftJoinAndSelect('group.owner', 'owner')
@@ -171,8 +178,14 @@ export class GroupsService {
     await this.groupRepository.update(groupId, { ownerId: newOwnerId });
   }
 
-  async delete(groupId: string, requesterId: string, requesterRole: UserRole): Promise<void> {
-    const group = await this.groupRepository.findOne({ where: { id: groupId } });
+  async delete(
+    groupId: string,
+    requesterId: string,
+    requesterRole: UserRole,
+  ): Promise<void> {
+    const group = await this.groupRepository.findOne({
+      where: { id: groupId },
+    });
     if (!group) {
       throw new NotFoundException('Group not found');
     }

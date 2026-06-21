@@ -1,5 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { PermissionLevel, ResourceType, SubjectType } from '../../../common/enums';
+import {
+  PermissionLevel,
+  ResourceType,
+  SubjectType,
+} from '../../../common/enums';
 import { Permission } from '../entities/permission.entity';
 
 export class PermissionDto {
