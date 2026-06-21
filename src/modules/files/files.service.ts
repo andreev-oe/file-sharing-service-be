@@ -73,14 +73,15 @@ export class FilesService {
 
     this.validateMimeType(uploadedFile.mimetype);
 
+    const originalName = Buffer.from(uploadedFile.originalname, 'latin1').toString('utf8');
     const resolvedFolderId = folderId ?? null;
     const nextVersion = await this.resolveNextVersion(
-      uploadedFile.originalname,
+      originalName,
       resolvedFolderId,
     );
 
     const fileId = crypto.randomUUID();
-    const s3Key = `${FILE_S3_KEY_PREFIX}${uploadedById}/${fileId}/${uploadedFile.originalname}`;
+    const s3Key = `${FILE_S3_KEY_PREFIX}${uploadedById}/${fileId}/${originalName}`;
 
     await this.storageService.upload(
       s3Key,
@@ -91,7 +92,7 @@ export class FilesService {
     try {
       const file = this.fileRepository.create({
         id: fileId,
-        name: uploadedFile.originalname,
+        name: originalName,
         s3Key,
         mimeType: uploadedFile.mimetype,
         size: uploadedFile.size,
