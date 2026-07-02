@@ -15,7 +15,8 @@ import { REDIS } from '../../infrastructure/cache/redis.provider';
 import { EventBus } from '../../infrastructure/events/event-bus';
 import type { PermissionChangedOnFolderEvent } from '../../infrastructure/events/permission-changed-on-folder.event';
 import type { FileStorageChangedEvent } from '../../infrastructure/events/file-storage-changed.event';
-import { UserRole } from '../../common/enums';
+import { PermissionsService } from '../permissions/permissions.service';
+import { ResourceType, UserRole } from '../../common/enums';
 import { Folder } from './entities/folder.entity';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { UpdateFolderDto } from './dto/update-folder.dto';
@@ -40,6 +41,7 @@ export class FoldersService implements OnModuleInit, OnModuleDestroy {
     private readonly folderRepository: Repository<Folder>,
     @Inject(REDIS) private readonly redis: Redis,
     private readonly eventBus: EventBus,
+    private readonly permissionsService: PermissionsService,
   ) {}
 
   onModuleInit() {
@@ -113,10 +115,66 @@ export class FoldersService implements OnModuleInit, OnModuleDestroy {
       return tree;
     }
 
-    const allFolders = await this.folderRepository.find({
-      where: isAdmin ? { isDeleted: false } : { ownerId, isDeleted: false },
-      order: { name: 'ASC' },
-    });
+    let allFolders: Folder[];
+
+    if (isAdmin) {
+      allFolders = await this.folderRepository.find({
+        where: { isDeleted: false },
+        order: { name: 'ASC' },
+      });
+    } else {
+      const ownedFolders = await this.folderRepository.find({
+        where: { ownerId, isDeleted: false },
+        order: { name: 'ASC' },
+      });
+
+      const permittedFolderIds =
+        await this.permissionsService.getAccessibleResourceIds(
+          ownerId,
+          ResourceType.FOLDER,
+        );
+
+      if (permittedFolderIds.length > 0) {
+        const permittedFolders = await this.folderRepository.find({
+          where: { id: In(permittedFolderIds), isDeleted: false },
+        });
+
+        const folderMap = new Map<string, Folder>(
+          ownedFolders.map((folder) => {
+            return [folder.id, folder];
+          }),
+        );
+        for (const folder of permittedFolders) {
+          folderMap.set(folder.id, folder);
+        }
+
+        const ancestorIds = new Set<string>();
+        for (const folder of permittedFolders) {
+          const pathSegments = folder.path.split('/').filter(Boolean);
+          const ancestorSegments = pathSegments.slice(0, -1);
+          for (const ancestorId of ancestorSegments) {
+            if (!folderMap.has(ancestorId)) {
+              ancestorIds.add(ancestorId);
+            }
+          }
+        }
+
+        if (ancestorIds.size > 0) {
+          const ancestorFolders = await this.folderRepository.find({
+            where: { id: In([...ancestorIds]), isDeleted: false },
+          });
+          for (const folder of ancestorFolders) {
+            folderMap.set(folder.id, folder);
+          }
+        }
+
+        allFolders = [...folderMap.values()].sort((folderA, folderB) => {
+          return folderA.name.localeCompare(folderB.name);
+        });
+      } else {
+        allFolders = ownedFolders;
+      }
+    }
 
     const tree = this.buildTree(allFolders, null);
     await this.redis.set(
@@ -130,27 +188,64 @@ export class FoldersService implements OnModuleInit, OnModuleDestroy {
 
   async findByIds(
     ids: string[],
-    ownerId: string,
+    userId: string,
     isAdmin: boolean,
   ): Promise<Folder[]> {
     if (ids.length === 0) {
       return [];
     }
+    if (isAdmin) {
+      return this.folderRepository.find({
+        where: { id: In(ids), isDeleted: false },
+        select: { id: true, name: true },
+      });
+    }
+    const permittedFolderIds =
+      await this.permissionsService.getAccessibleResourceIds(
+        userId,
+        ResourceType.FOLDER,
+      );
+    const accessibleIds = permittedFolderIds.filter((folderId) => {
+      return ids.includes(folderId);
+    });
+    if (accessibleIds.length > 0) {
+      return this.folderRepository.find({
+        where: [
+          { id: In(ids), ownerId: userId, isDeleted: false },
+          { id: In(accessibleIds), isDeleted: false },
+        ],
+        select: { id: true, name: true },
+      });
+    }
     return this.folderRepository.find({
-      where: {
-        id: In(ids),
-        ...(isAdmin ? {} : { ownerId }),
-        isDeleted: false,
-      },
+      where: { id: In(ids), ownerId: userId, isDeleted: false },
       select: { id: true, name: true },
     });
   }
 
-  async getChildFolders(folderId: string, ownerId: string): Promise<Folder[]> {
-    await this.findOwnedOrFail(folderId, ownerId);
+  async getChildFolders(folderId: string, userId: string): Promise<Folder[]> {
+    const permittedFolderIds =
+      await this.permissionsService.getAccessibleResourceIds(
+        userId,
+        ResourceType.FOLDER,
+      );
+
+    if (permittedFolderIds.length > 0) {
+      return this.folderRepository.find({
+        where: [
+          { parentId: folderId, ownerId: userId, isDeleted: false },
+          {
+            parentId: folderId,
+            id: In(permittedFolderIds),
+            isDeleted: false,
+          },
+        ],
+        order: { name: 'ASC' },
+      });
+    }
 
     return this.folderRepository.find({
-      where: { parentId: folderId, ownerId, isDeleted: false },
+      where: { parentId: folderId, ownerId: userId, isDeleted: false },
       order: { name: 'ASC' },
     });
   }
@@ -253,6 +348,8 @@ export class FoldersService implements OnModuleInit, OnModuleDestroy {
   private async handlePermissionChangedOnFolder(
     event: PermissionChangedOnFolderEvent,
   ): Promise<void> {
+    await this.invalidateAllTreeCaches();
+
     const parentFolder = await this.folderRepository.findOne({
       where: { id: event.folderId },
       select: { path: true },
@@ -350,6 +447,13 @@ export class FoldersService implements OnModuleInit, OnModuleDestroy {
       `${FOLDER_TREE_CACHE_KEY_PREFIX}${ownerId}`,
       ADMIN_TREE_CACHE_KEY,
     );
+  }
+
+  private async invalidateAllTreeCaches(): Promise<void> {
+    const keys = await this.redis.keys(`${FOLDER_TREE_CACHE_KEY_PREFIX}*`);
+    if (keys.length > 0) {
+      await this.redis.del(...keys);
+    }
   }
 
   private buildTree(

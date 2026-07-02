@@ -39,7 +39,17 @@ export class GroupsService {
       .orderBy('group.createdAt', 'DESC');
 
     if (requesterRole !== UserRole.ADMIN) {
-      builder.where('group.ownerId = :requesterId', { requesterId });
+      builder
+        .leftJoin(
+          GroupMember,
+          'myMembership',
+          'myMembership.groupId = group.id AND myMembership.userId = :requesterId',
+          { requesterId },
+        )
+        .where(
+          'group.ownerId = :requesterId OR myMembership.id IS NOT NULL',
+          { requesterId },
+        );
     }
 
     const { entities, raw } = await builder.getRawAndEntities();
@@ -66,7 +76,17 @@ export class GroupsService {
       .where('group.id = :groupId', { groupId });
 
     if (requesterRole !== UserRole.ADMIN) {
-      builder.andWhere('group.ownerId = :requesterId', { requesterId });
+      builder
+        .leftJoin(
+          GroupMember,
+          'myMembership',
+          'myMembership.groupId = group.id AND myMembership.userId = :requesterId',
+          { requesterId },
+        )
+        .andWhere(
+          'group.ownerId = :requesterId OR myMembership.id IS NOT NULL',
+          { requesterId },
+        );
     }
 
     const { entities, raw } = await builder.getRawAndEntities();
