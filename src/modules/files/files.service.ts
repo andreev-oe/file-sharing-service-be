@@ -6,11 +6,13 @@ import {
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Repository } from 'typeorm';
+import { Brackets, In, IsNull, Repository } from 'typeorm';
 import type Redis from 'ioredis';
 import { REDIS } from '../../infrastructure/cache/redis.provider';
 import { StorageService } from '../../infrastructure/storage/storage.service';
 import { EventBus } from '../../infrastructure/events/event-bus';
+import { PermissionsService } from '../permissions/permissions.service';
+import { ResourceType } from '../../common/enums';
 import { File } from './entities/file.entity';
 import { UpdateFileDto } from './dto/update-file.dto';
 
@@ -60,6 +62,7 @@ export class FilesService {
     private readonly storageService: StorageService,
     @Inject(REDIS) private readonly redis: Redis,
     private readonly eventBus: EventBus,
+    private readonly permissionsService: PermissionsService,
   ) {}
 
   async upload(
@@ -123,33 +126,44 @@ export class FilesService {
 
   async findByIds(
     ids: string[],
-    uploadedById: string,
+    userId: string,
     isAdmin: boolean,
   ): Promise<File[]> {
     if (ids.length === 0) {
       return [];
     }
+    if (isAdmin) {
+      return this.fileRepository.find({
+        where: { id: In(ids), isDeleted: false },
+        select: { id: true, name: true },
+      });
+    }
+    const permittedFileIds =
+      await this.permissionsService.getAccessibleResourceIds(
+        userId,
+        ResourceType.FILE,
+      );
+    const accessibleIds = permittedFileIds.filter((fileId) => {
+      return ids.includes(fileId);
+    });
+    if (accessibleIds.length > 0) {
+      return this.fileRepository.find({
+        where: [
+          { id: In(ids), uploadedById: userId, isDeleted: false },
+          { id: In(accessibleIds), isDeleted: false },
+        ],
+        select: { id: true, name: true },
+      });
+    }
     return this.fileRepository.find({
-      where: {
-        id: In(ids),
-        ...(isAdmin ? {} : { uploadedById }),
-        isDeleted: false,
-      },
+      where: { id: In(ids), uploadedById: userId, isDeleted: false },
       select: { id: true, name: true },
     });
   }
 
-  async findById(
-    id: string,
-    uploadedById: string,
-    isAdmin: boolean,
-  ): Promise<File> {
+  async findById(id: string): Promise<File> {
     const file = await this.fileRepository.findOne({
-      where: {
-        id,
-        ...(isAdmin ? {} : { uploadedById }),
-        isDeleted: false,
-      },
+      where: { id, isDeleted: false },
     });
     if (!file) {
       throw new NotFoundException('File not found');
@@ -157,18 +171,14 @@ export class FilesService {
     return file;
   }
 
-  async getDownloadUrl(
-    id: string,
-    uploadedById: string,
-    isAdmin: boolean,
-  ): Promise<{ url: string }> {
+  async getDownloadUrl(id: string): Promise<{ url: string }> {
     const cacheKey = `${PRESIGNED_URL_CACHE_KEY_PREFIX}${id}`;
     const cachedUrl = await this.redis.get(cacheKey);
     if (cachedUrl) {
       return { url: cachedUrl };
     }
 
-    const file = await this.findById(id, uploadedById, isAdmin);
+    const file = await this.findById(id);
     const presignedUrl = await this.storageService.getPresignedUrl(
       file.s3Key,
       PRESIGNED_URL_TTL_SECONDS,
@@ -183,13 +193,8 @@ export class FilesService {
     return { url: presignedUrl };
   }
 
-  async update(
-    id: string,
-    uploadedById: string,
-    isAdmin: boolean,
-    dto: UpdateFileDto,
-  ): Promise<File> {
-    const file = await this.findById(id, uploadedById, isAdmin);
+  async update(id: string, dto: UpdateFileDto): Promise<File> {
+    const file = await this.findById(id);
 
     const updatedFields: Partial<File> = {};
     if (dto.name !== undefined) {
@@ -221,15 +226,11 @@ export class FilesService {
       }
     }
 
-    return this.findById(id, uploadedById, isAdmin);
+    return this.findById(id);
   }
 
-  async softDelete(
-    id: string,
-    uploadedById: string,
-    isAdmin: boolean,
-  ): Promise<void> {
-    const file = await this.findById(id, uploadedById, isAdmin);
+  async softDelete(id: string): Promise<void> {
+    const file = await this.findById(id);
     await this.fileRepository.update(id, { isDeleted: true });
     await this.invalidateDownloadUrlCache(id);
     if (file.folderId !== null) {
@@ -240,12 +241,8 @@ export class FilesService {
     }
   }
 
-  async getVersions(
-    id: string,
-    uploadedById: string,
-    isAdmin: boolean,
-  ): Promise<File[]> {
-    const currentFile = await this.findById(id, uploadedById, isAdmin);
+  async getVersions(id: string): Promise<File[]> {
+    const currentFile = await this.findById(id);
 
     return this.fileRepository.find({
       where: {
@@ -258,24 +255,43 @@ export class FilesService {
 
   async findByFolder(
     folderId: string | null,
-    uploadedById: string,
+    userId: string,
     isAdmin: boolean,
   ): Promise<File[]> {
-    const folderFilter =
-      isAdmin && folderId === null ? {} : { folderId: folderId ?? IsNull() };
+    if (isAdmin) {
+      const folderFilter =
+        folderId === null ? {} : { folderId: folderId ?? IsNull() };
+      return this.fileRepository.find({
+        where: { ...folderFilter, isDeleted: false },
+        order: { name: 'ASC' },
+      });
+    }
+
+    const permittedFileIds =
+      await this.permissionsService.getAccessibleResourceIds(
+        userId,
+        ResourceType.FILE,
+      );
+    const folderFilter = { folderId: folderId ?? IsNull() };
+
+    if (permittedFileIds.length > 0) {
+      return this.fileRepository.find({
+        where: [
+          { ...folderFilter, uploadedById: userId, isDeleted: false },
+          { ...folderFilter, id: In(permittedFileIds), isDeleted: false },
+        ],
+        order: { name: 'ASC' },
+      });
+    }
 
     return this.fileRepository.find({
-      where: {
-        ...folderFilter,
-        ...(isAdmin ? {} : { uploadedById }),
-        isDeleted: false,
-      },
+      where: { ...folderFilter, uploadedById: userId, isDeleted: false },
       order: { name: 'ASC' },
     });
   }
 
   async search(
-    uploadedById: string,
+    userId: string,
     query: string,
     isAdmin: boolean,
   ): Promise<File[]> {
@@ -286,7 +302,23 @@ export class FilesService {
       .orderBy('file.name', 'ASC');
 
     if (!isAdmin) {
-      builder.andWhere('file.uploadedById = :uploadedById', { uploadedById });
+      const permittedFileIds =
+        await this.permissionsService.getAccessibleResourceIds(
+          userId,
+          ResourceType.FILE,
+        );
+      if (permittedFileIds.length > 0) {
+        builder.andWhere(
+          new Brackets((qb) => {
+            qb.where('file.uploadedById = :userId', { userId }).orWhere(
+              'file.id IN (:...permittedFileIds)',
+              { permittedFileIds },
+            );
+          }),
+        );
+      } else {
+        builder.andWhere('file.uploadedById = :userId', { userId });
+      }
     }
 
     return builder.getMany();

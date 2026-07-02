@@ -142,15 +142,8 @@ export class FilesController {
   @ApiOkResponse({ type: FileDto })
   @UseGuards(PermissionsGuard)
   @RequirePermission(ResourceType.FILE, PermissionLevel.VIEW)
-  async findOne(
-    @CurrentUser() user: User,
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<FileDto> {
-    const file = await this.filesService.findById(
-      id,
-      user.id,
-      user.role === UserRole.ADMIN,
-    );
+  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<FileDto> {
+    const file = await this.filesService.findById(id);
     return FileDto.fromEntity(file);
   }
 
@@ -159,15 +152,8 @@ export class FilesController {
   @ApiOkResponse({ type: DownloadUrlDto })
   @UseGuards(PermissionsGuard)
   @RequirePermission(ResourceType.FILE, PermissionLevel.VIEW)
-  getDownloadUrl(
-    @CurrentUser() user: User,
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<DownloadUrlDto> {
-    return this.filesService.getDownloadUrl(
-      id,
-      user.id,
-      user.role === UserRole.ADMIN,
-    );
+  getDownloadUrl(@Param('id', ParseUUIDPipe) id: string): Promise<DownloadUrlDto> {
+    return this.filesService.getDownloadUrl(id);
   }
 
   @Get(':id/versions')
@@ -176,14 +162,9 @@ export class FilesController {
   @UseGuards(PermissionsGuard)
   @RequirePermission(ResourceType.FILE, PermissionLevel.VIEW)
   async getVersions(
-    @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<FileDto[]> {
-    const files = await this.filesService.getVersions(
-      id,
-      user.id,
-      user.role === UserRole.ADMIN,
-    );
+    const files = await this.filesService.getVersions(id);
     return files.map((file) => {
       return FileDto.fromEntity(file);
     });
@@ -197,16 +178,10 @@ export class FilesController {
   @UseGuards(PermissionsGuard)
   @RequirePermission(ResourceType.FILE, PermissionLevel.EDIT)
   async update(
-    @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateFileDto,
   ): Promise<FileDto> {
-    const file = await this.filesService.update(
-      id,
-      user.id,
-      user.role === UserRole.ADMIN,
-      dto,
-    );
+    const file = await this.filesService.update(id, dto);
     return FileDto.fromEntity(file);
   }
 
@@ -216,14 +191,7 @@ export class FilesController {
   @ApiNoContentResponse({ description: 'Файл удалён' })
   @UseGuards(PermissionsGuard)
   @RequirePermission(ResourceType.FILE, PermissionLevel.MANAGE)
-  softDelete(
-    @CurrentUser() user: User,
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<void> {
-    return this.filesService.softDelete(
-      id,
-      user.id,
-      user.role === UserRole.ADMIN,
-    );
+  softDelete(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    return this.filesService.softDelete(id);
   }
 }

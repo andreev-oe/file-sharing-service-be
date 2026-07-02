@@ -205,6 +205,47 @@ export class PermissionsService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  async getAccessibleResourceIds(
+    userId: string,
+    resourceType: ResourceType,
+  ): Promise<string[]> {
+    const memberships = await this.groupMemberRepository.find({
+      where: { userId },
+      select: { groupId: true },
+    });
+    const groupIds = memberships.map((membership) => {
+      return membership.groupId;
+    });
+
+    const queryBuilder = this.permissionRepository
+      .createQueryBuilder('permission')
+      .select(['permission.resourceId'])
+      .distinct(true)
+      .where('permission.resourceType = :resourceType', { resourceType })
+      .andWhere(
+        new Brackets((qb) => {
+          qb.where(
+            'permission.subjectType = :userType AND permission.subjectId = :userId',
+            { userType: SubjectType.USER, userId },
+          );
+          if (groupIds.length > 0) {
+            qb.orWhere(
+              'permission.subjectType = :groupType AND permission.subjectId IN (:...groupIds)',
+              { groupType: SubjectType.GROUP, groupIds },
+            );
+          }
+          qb.orWhere('permission.subjectType = :everyoneType', {
+            everyoneType: SubjectType.EVERYONE,
+          });
+        }),
+      );
+
+    const permissions = await queryBuilder.getMany();
+    return permissions.map((permission) => {
+      return permission.resourceId;
+    });
+  }
+
   async checkForUser(
     userId: string,
     resourceType: ResourceType,
